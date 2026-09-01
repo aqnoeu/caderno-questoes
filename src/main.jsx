@@ -312,21 +312,42 @@ function App() {
     setBusy(true);
     setDrafts((ds) => ds.map((q) => targets.some((t) => t.tempId === q.tempId) ? { ...q, aiStatus: "analyzing" } : q));
     let done = 0;
+    let failed = 0;
     try {
-      for (let start = 0; start < targets.length; start += 10) {
-        const group = targets.slice(start, start + 10);
+      // Cinco por vez reduz picos no Gemini. Os blocos são enviados em sequência.
+      for (let start = 0; start < targets.length; start += 5) {
+        const group = targets.slice(start, start + 5);
         setNotice(`Analisando com IA: ${done}/${targets.length} concluída(s)…`);
-        const { data, error } = await supabase.functions.invoke("analyze-questions", {
-          body: {
-            questions: group.map((q, index) => ({
-              index,
-              statement: q.statement,
-              alternatives: Object.fromEntries(q.alternatives.map((a) => [a.letter, a.text])),
-              correct_option: q.correct_option,
-            })),
-          },
-        });
-        if (error) throw error;
+        let data;
+        let lastError;
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          const response = await supabase.functions.invoke("analyze-questions", {
+            body: {
+              questions: group.map((q, index) => ({
+                index,
+                statement: q.statement,
+                alternatives: Object.fromEntries(q.alternatives.map((a) => [a.letter, a.text])),
+                correct_option: q.correct_option,
+              })),
+            },
+          });
+          if (!response.error) {
+            data = response.data;
+            break;
+          }
+          lastError = response.error;
+          if (attempt < 3) {
+            setNotice(`Gemini ocupado; tentando novamente (${attempt}/3)…`);
+            await new Promise((resolve) => setTimeout(resolve, attempt * 2500));
+          }
+        }
+        if (!data) {
+          failed += group.length;
+          setDrafts((ds) => ds.map((q) => group.some((g) => g.tempId === q.tempId) ? { ...q, aiStatus: "error" } : q));
+          done += group.length;
+          console.error("Falha ao analisar bloco", lastError);
+          continue;
+        }
         const byIndex = new Map((data?.results || []).map((r) => [r.index, r]));
         setDrafts((ds) => ds.map((q) => {
           const localIndex = group.findIndex((g) => g.tempId === q.tempId);
@@ -345,8 +366,9 @@ function App() {
           } : { ...q, aiStatus: "error" };
         }));
         done += group.length;
+        if (start + 5 < targets.length) await new Promise((resolve) => setTimeout(resolve, 1200));
       }
-      setNotice(`${done} questão(ões) analisada(s) pela IA. Revise antes de salvar.`);
+      setNotice(failed ? `${done - failed} questão(ões) analisada(s); ${failed} ficaram pendentes. Você pode selecioná-las e tentar novamente.` : `${done} questão(ões) analisada(s) pela IA. Revise antes de salvar.`);
     } catch (error) {
       setDrafts((ds) => ds.map((q) => q.aiStatus === "analyzing" ? { ...q, aiStatus: "error" } : q));
       setNotice(`Erro na análise com IA: ${error.message}`);

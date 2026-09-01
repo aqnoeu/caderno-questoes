@@ -37,7 +37,7 @@ button.danger {
   color: #ad3038;
 }
 main {
-  max-width: 1050px;
+  max-width: 1380px;
   margin: auto;
   padding: 28px 18px 60px;
 }
@@ -69,6 +69,39 @@ nav button.active {
   background: white;
   color: #3157d5;
 }
+.steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+  margin: 0 0 16px;
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px;
+  color: #737d91;
+  border: 1px solid #e1e6ef;
+  border-radius: 12px;
+  background: #f8f9fc;
+}
+.step span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #dce1ea;
+  color: #526078;
+  font-weight: 800;
+}
+.step b,
+.step small { display: block; }
+.step small { margin-top: 2px; font-size: 11px; }
+.step.active { border-color: #8ba4fb; background: #edf1ff; color: #294ebf; }
+.step.active span { background: #3157d5; color: white; }
+.step.done span { background: #23a16d; color: white; }
 .card {
   background: white;
   border: 1px solid #e0e5ef;
@@ -110,6 +143,109 @@ select {
   text-align: center;
   color: #8b93a4;
   margin: 15px;
+}
+.answer-key {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #e4e8f0;
+}
+.answer-key h3,
+.answer-key p {
+  margin: 0 0 9px;
+}
+.answer-key textarea {
+  margin-bottom: 9px;
+}
+.batch-title,
+.batch-actions,
+.bulk-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.batch-title {
+  justify-content: space-between;
+}
+.batch-title h2,
+.batch-title p {
+  margin: 0 0 6px;
+}
+.select-all {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.bulk-tools {
+  margin: 18px 0 10px;
+}
+.bulk-tools input {
+  flex: 1 1 220px;
+  border: 1px solid #cbd3e2;
+  border-radius: 9px;
+  padding: 10px 11px;
+}
+.batch-actions {
+  margin-bottom: 16px;
+}
+.batch-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e0e5ef;
+  border-radius: 12px;
+}
+.batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1050px;
+  font-size: 13px;
+}
+.batch-table th,
+.batch-table td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #e7eaf1;
+  vertical-align: middle;
+}
+.batch-table th {
+  background: #f4f6fa;
+  color: #59647a;
+}
+.statement-cell {
+  max-width: 340px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.batch-table tr.duplicate { background: #fff8e5; }
+.batch-table tr.incomplete { background: #fff0f1; }
+.batch-table tr.annulled-status { background: #f6f2ff; }
+.expanded-row td { background: #fafbfe; padding: 18px; }
+.compact { padding: 7px 10px; font-size: 12px; }
+.status,
+.difficulty {
+  display: inline-block;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: #edf0f5;
+}
+.status.ready { background: #e7f8ef; color: #137a51; }
+.status.duplicate { background: #fff0c7; color: #805900; }
+.status.incomplete { background: #ffe1e4; color: #a82f38; }
+.status.annulled-status { background: #eee7ff; color: #6640a8; }
+.difficulty.facil { background: #e7f8ef; color: #137a51; }
+.difficulty.media { background: #fff3ce; color: #805900; }
+.difficulty.dificil { background: #ffe1e4; color: #a82f38; }
+.inline-editor { max-width: 950px; }
+.confidence {
+  display: flex;
+  align-items: center;
+  color: #5f697d;
+}
+button.annulled {
+  background: #fff2d8;
+  color: #855b00;
+  margin: 7px 0;
 }
 .notice {
   background: #fff7dc;
@@ -293,7 +429,25 @@ select {
   text-align: center;
   margin-top: 30vh;
 }
+.celebration {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #172033b8;
+  color: white;
+  animation: celebrationFade 1.4s ease both;
+}
+.celebration span { font-size: 72px; color: #ffd65a; animation: celebrationPop .6s ease; }
+.celebration b { font-size: 30px; }
+.celebration small { margin-top: 8px; font-size: 16px; }
+@keyframes celebrationPop { from { transform: scale(.25) rotate(-25deg); } to { transform: scale(1) rotate(0); } }
+@keyframes celebrationFade { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
 @media (max-width: 650px) {
+  .steps { grid-template-columns: 1fr 1fr; }
   .cols {
     grid-template-columns: 1fr;
   }
@@ -331,5 +485,9 @@ select {
   }
   .option {
     line-height: 1.35;
+  }
+  .batch-actions button,
+  .bulk-tools button {
+    width: 100%;
   }
 }

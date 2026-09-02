@@ -131,8 +131,14 @@ function autoClassify(statement, saved = []) {
     ? { discipline: rule.discipline, subject: rule.subject }
     : { discipline: "", subject: "" };
 }
+function removePdfHeadersAndFooters(text) {
+  return text
+    .replace(/(?:^|\n)\s*ESCOLA\s+NACIONAL\s+DE\s+FORMA[CÇ][AÃ]O\s+E\s+APERFEIÇOAMENTO\s+DE\s+MAGISTRADOS\s*-?\s*ENFAM\s*(?=\n|$)/gim, "\n")
+    .replace(/(?:^|\n)\s*FGV\s+CONHECIMENTO\s+TIPO\s+[^\n]*?-\s*P[ÁA]GINA\s*\d+\s*-?\s*(?=\n|$)/gim, "\n")
+    .replace(/(?:^|\n)\s*P[ÁA]GINA\s+\d+\s*(?=\n|$)/gim, "\n");
+}
 function parseQuestions(text) {
-  const clean = text.replace(/\r/g, "").trim(),
+  const clean = removePdfHeadersAndFooters(text).replace(/\r/g, "").trim(),
     marks = [
       ...clean.matchAll(/(?:^|\n)\s*(\d{1,3})(?:\s*[.)º°-]\s*|\s*\n\s*)/g),
     ];
@@ -435,6 +441,25 @@ function App() {
     if (error) setNotice(error.message);
     else load();
   }
+  async function toggleHidden(q) {
+    const { error } = await supabase.from("questions").update({ is_hidden: !q.is_hidden }).eq("id", q.id);
+    if (error) setNotice(error.message);
+    else {
+      setNotice(q.is_hidden ? "Questão exibida novamente nos estudos." : "Questão ocultada dos estudos.");
+      load();
+    }
+  }
+  async function updateQuestion(id, changes) {
+    const payload = { ...changes };
+    if (payload.statement) payload.normalized_statement = normalize(payload.statement);
+    const { error } = await supabase.from("questions").update(payload).eq("id", id);
+    if (error) setNotice(error.message);
+    else {
+      setNotice("Questão atualizada.");
+      load();
+    }
+    return !error;
+  }
   return (
     <main>
       <header>
@@ -528,30 +553,7 @@ function App() {
         </section>
       )}
       {tab === "questoes" && (
-        <section className="card">
-          <h2>Questões cadastradas</h2>
-          {!questions.length ? (
-            <p>Nenhuma questão cadastrada.</p>
-          ) : (
-            questions.map((q, i) => (
-              <article className="item" key={q.id}>
-                <div>
-                  <b>
-                    {i + 1}. {q.statement}
-                  </b>
-                  <small>
-                    {q.discipline || "Sem disciplina"} ·{" "}
-                    {q.subject || "Sem assunto"} · Gabarito{" "}
-                    {q.correct_option === "*" ? "Anulada" : q.correct_option}
-                  </small>
-                </div>
-                <button className="danger" onClick={() => remove(q.id)}>
-                  Excluir
-                </button>
-              </article>
-            ))
-          )}
-        </section>
+        <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} />
       )}
       {tab === "estudos" && (
         <Study
@@ -608,6 +610,47 @@ function Auth() {
       </button>
       {msg && <p>{msg}</p>}
     </div>
+  );
+}
+
+function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
+  const [editingId, setEditingId] = React.useState(null);
+  const [draft, setDraft] = React.useState(null);
+  const startEdit = (q) => {
+    setEditingId(q.id);
+    setDraft({ ...q, alternatives: (q.alternatives || []).map((a) => ({ ...a })) });
+  };
+  const changeAlternative = (letter, text) => setDraft((d) => ({ ...d, alternatives: d.alternatives.map((a) => a.letter === letter ? { ...a, text } : a) }));
+  const save = async () => {
+    if (!draft.statement.trim() || !draft.discipline?.trim() || !draft.subject?.trim()) return;
+    const ok = await updateQuestion(draft.id, {
+      statement: draft.statement.trim(), alternatives: draft.alternatives,
+      correct_option: draft.correct_option, discipline: draft.discipline.trim(), subject: draft.subject.trim(),
+      explanation: draft.explanation?.trim() || null, difficulty_initial: draft.difficulty_initial || "media",
+      difficulty_current: draft.difficulty_current || draft.difficulty_initial || "media",
+    });
+    if (ok) { setEditingId(null); setDraft(null); }
+  };
+  return (
+    <section className="questions-library">
+      <div className="library-heading"><div><h2>Questões cadastradas</h2><p>{questions.length} questão(ões), incluindo ocultas.</p></div></div>
+      {!questions.length ? <div className="card"><p>Nenhuma questão cadastrada.</p></div> : <div className="question-grid">
+        {questions.map((q) => <article className={`question-card ${q.is_hidden ? "hidden-card" : ""}`} key={q.id}>
+          <div className="card-top"><span className="question-id">ID {String(q.id).slice(0, 8)}</span><span className={`difficulty ${q.difficulty_current || q.difficulty_initial || "media"}`}>{q.difficulty_current || q.difficulty_initial || "media"}</span></div>
+          <h3>{q.discipline || "Sem disciplina"}</h3>
+          <p className="question-subject">{q.subject || "Sem assunto"}</p>
+          <p className="question-preview">{q.statement}</p>
+          <div className="card-meta">Gabarito: {q.correct_option === "*" ? "Anulada" : q.correct_option} {q.is_hidden && <span className="hidden-label">Oculta dos estudos</span>}</div>
+          <div className="card-actions"><button className="light compact" onClick={() => editingId === q.id ? (setEditingId(null), setDraft(null)) : startEdit(q)}>{editingId === q.id ? "Fechar" : "Editar"}</button><button className="light compact" onClick={() => toggleHidden(q)}>{q.is_hidden ? "Exibir" : "Ocultar"}</button><button className="danger compact" onClick={() => remove(q.id)}>Excluir</button></div>
+          {editingId === q.id && draft && <div className="saved-editor">
+            <label>Enunciado<textarea rows="5" value={draft.statement} onChange={(e) => setDraft({ ...draft, statement: e.target.value })} /></label>
+            <div className="cols"><label>Disciplina<input value={draft.discipline || ""} onChange={(e) => setDraft({ ...draft, discipline: e.target.value })} /></label><label>Assunto<input value={draft.subject || ""} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></label></div>
+            {draft.alternatives.map((a) => <label className="alt" key={a.letter}><input type="radio" name={`answer-${draft.id}`} checked={draft.correct_option === a.letter} onChange={() => setDraft({ ...draft, correct_option: a.letter, is_annulled: false })} /><b>{a.letter}</b><input value={a.text} onChange={(e) => changeAlternative(a.letter, e.target.value)} /></label>)}
+            <div className="cols"><select value={draft.difficulty_initial || "media"} onChange={(e) => setDraft({ ...draft, difficulty_initial: e.target.value, difficulty_current: e.target.value })}><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select><button onClick={save}>Salvar alterações</button></div>
+          </div>}
+        </article>)}
+      </div>}
+    </section>
   );
 }
 function BatchReview({ drafts, setDrafts, questions, busy, analyzeSelected, saveBatch, deleteSelected, applyBulk }) {
@@ -777,6 +820,15 @@ function DraftEditor({ q, patchDraft, questions }) {
     </div>
   );
 }
+function FormattedQuestionText({ text }) {
+  const lines = String(text || "")
+    // PDFs frequentemente unem os itens I, II, III… ao parágrafo anterior.
+    .replace(/\s+(?=(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\.\s)/g, "\n")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return <div className="question-statement">{lines.map((line, index) => <p key={index}>{line}</p>)}</div>;
+}
 function Study({ questions, supabase, userId }) {
   const [discipline, setDiscipline] = React.useState(""),
     [subject, setSubject] = React.useState(""),
@@ -790,7 +842,7 @@ function Study({ questions, supabase, userId }) {
     [celebration, setCelebration] = React.useState(false);
   const pool = questions.filter(
     (q) =>
-      !q.is_annulled && q.correct_option !== "*" &&
+      !q.is_annulled && !q.is_hidden && q.correct_option !== "*" &&
       (!discipline || q.discipline === discipline) &&
       (!subject || q.subject === subject),
   );
@@ -946,7 +998,7 @@ function Study({ questions, supabase, userId }) {
               <div className="cycle-label">
                 Ciclo de {cycle.length} questões · Dificuldade {q.difficulty_current || "media"}
               </div>
-              <h2>{q.statement}</h2>
+              <FormattedQuestionText text={q.statement} />
               {q.alternatives.map((a) => (
                 <button
                   key={a.letter}

@@ -934,6 +934,9 @@ function Study({ questions, supabase, userId }) {
     const review = cycle.filter((_x, i) => status[i] !== "correct");
     if (review.length) begin(review, remaining);
   }
+  function finishCycle() {
+    setFinished(true);
+  }
   if (!questions.length)
     return (
       <section className="card">
@@ -960,11 +963,13 @@ function Study({ questions, supabase, userId }) {
       : correctTotal >= Math.ceil(cycle.length * 0.7)
         ? "Muito bom! Você está no caminho certo."
         : "Continue praticando: cada revisão fortalece o aprendizado.";
+  const answeredTotal = correctTotal + wrongTotal;
+  const completion = cycle.length ? Math.round((answeredTotal / cycle.length) * 100) : 0;
   return (
-    <section className="study-wrap">
+    <section className="study-dashboard">
       {celebration && <div className="celebration" role="status"><span>★</span><b>Excelente!</b><small>Você acertou uma questão difícil.</small></div>}
-      <div className="card study">
-        <div className="cols">
+      <div className="card study study-main">
+        <div className="study-filters">
           <select
             value={discipline}
             onChange={(e) => setDiscipline(e.target.value)}
@@ -978,12 +983,13 @@ function Study({ questions, supabase, userId }) {
           </select>
           <select value={subject} onChange={(e) => setSubject(e.target.value)}>
             <option value="">Todos os assuntos</option>
-            {[...new Set(questions.map((x) => x.subject).filter(Boolean))].map(
+            {[...new Set(questions.filter((x) => !discipline || x.discipline === discipline).map((x) => x.subject).filter(Boolean))].map(
               (x) => (
                 <option key={x}>{x}</option>
               ),
             )}
           </select>
+          <button className="light clear-filters" onClick={() => { setDiscipline(""); setSubject(""); }}>↻ Limpar filtros</button>
         </div>
         {!cycle.length ? (
           <p>Nenhuma questão encontrada para os filtros selecionados.</p>
@@ -1021,9 +1027,12 @@ function Study({ questions, supabase, userId }) {
         ) : (
           q && (
             <>
-              <div className="cycle-label">
-                Ciclo de {cycle.length} questões · Dificuldade {q.difficulty_current || "media"}
+              <div className="study-cycle-head">
+                <b>Ciclo de {cycle.length} questões</b>
+                <span className={`difficulty ${q.difficulty_current || "media"}`}>▥ Dificuldade: {q.difficulty_current || "media"}</span>
+                <span className="study-position">{pos + 1} de {cycle.length}</span>
               </div>
+              <div className="study-progress"><span style={{ width: `${((pos + 1) / cycle.length) * 100}%` }} /></div>
               <FormattedQuestionText text={q.statement} />
               {q.alternatives.map((a) => (
                 <button
@@ -1051,39 +1060,33 @@ function Study({ questions, supabase, userId }) {
               <div className="study-actions">
                 {!checked && (
                   <button className="light" onClick={skip}>
-                    Pular questão
+                    ▷ Pular questão
                   </button>
                 )}
+                {!checked && <button className="light" onClick={finishCycle}>⚑ Finalizar ciclo</button>}
                 <button
                   disabled={!checked && !choice}
                   onClick={checked ? advance : correct}
                 >
-                  {checked ? "Próxima" : "Corrigir"}
+                  {checked ? "Próxima" : "✓ Corrigir"}
                 </button>
               </div>
             </>
           )
         )}
       </div>
-      {cycle.length > 0 && (
-        <aside className="progress-dots" aria-label="Progresso do ciclo">
-          {status.map((state, i) => (
-            <span
-              key={i}
-              className={`dot ${state || "pending"} ${!finished && i === pos ? "current" : ""}`}
-              title={
-                state === "correct"
-                  ? "Correta"
-                  : state === "wrong"
-                    ? "Errada"
-                    : state === "skipped"
-                      ? "Pulada"
-                      : "Não respondida"
-              }
-            />
-          ))}
-        </aside>
-      )}
+      {cycle.length > 0 && <aside className="card study-sidebar" aria-label="Progresso do ciclo">
+        <div className="sidebar-title"><span>🎓</span><b>Seu progresso neste ciclo</b></div>
+        <div className="progress-overview">
+          <div className="progress-ring" style={{ "--progress": `${completion * 3.6}deg` }}><b>{completion}%</b></div>
+          <div><b>{answeredTotal} de {cycle.length}</b><span>questões respondidas</span><div className="mini-progress"><i style={{ width: `${completion}%` }} /></div></div>
+        </div>
+        <div className="sidebar-section"><b>Questões do ciclo</b><div className="dot-grid">
+          {status.map((state, i) => <span key={i} className={`cycle-dot ${state || "pending"} ${!finished && i === pos ? "current" : ""}`}>{i + 1}{state === "correct" && <i>✓</i>}</span>)}
+        </div></div>
+        <div className="sidebar-section"><b>Estatísticas rápidas</b><div className="quick-stats"><span className="stat correct-stat"><b>{correctTotal}</b><small>Acertos</small></span><span className="stat wrong-stat"><b>{wrongTotal}</b><small>Erros</small></span><span className="stat"><b>{cycle.length - answeredTotal}</b><small>Pendentes</small></span></div></div>
+        <div className="sidebar-message"><b>🏆 Foco + Consistência = Resultado</b><span>{motivational}</span></div>
+      </aside>}
     </section>
   );
 }

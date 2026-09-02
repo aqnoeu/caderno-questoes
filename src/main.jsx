@@ -616,6 +616,21 @@ function Auth() {
 function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
   const [editingId, setEditingId] = React.useState(null);
   const [draft, setDraft] = React.useState(null);
+  const [search, setSearch] = React.useState("");
+  const [disciplineFilter, setDisciplineFilter] = React.useState("");
+  const [subjectFilter, setSubjectFilter] = React.useState("");
+  const [difficultyFilter, setDifficultyFilter] = React.useState("");
+  const [visibilityFilter, setVisibilityFilter] = React.useState("all");
+  const disciplines = [...new Set(questions.map((q) => q.discipline).filter(Boolean))].sort();
+  const subjects = [...new Set(questions.map((q) => q.subject).filter(Boolean))].sort();
+  const filteredQuestions = questions.filter((q) => {
+    const searchable = `${q.id} ${q.statement} ${q.discipline || ""} ${q.subject || ""}`.toLowerCase();
+    return (!search || searchable.includes(search.toLowerCase())) &&
+      (!disciplineFilter || q.discipline === disciplineFilter) &&
+      (!subjectFilter || q.subject === subjectFilter) &&
+      (!difficultyFilter || (q.difficulty_current || q.difficulty_initial || "media") === difficultyFilter) &&
+      (visibilityFilter === "all" || (visibilityFilter === "visible" ? !q.is_hidden : q.is_hidden));
+  });
   const startEdit = (q) => {
     setEditingId(q.id);
     setDraft({ ...q, alternatives: (q.alternatives || []).map((a) => ({ ...a })) });
@@ -633,9 +648,16 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
   };
   return (
     <section className="questions-library">
-      <div className="library-heading"><div><h2>Questões cadastradas</h2><p>{questions.length} questão(ões), incluindo ocultas.</p></div></div>
-      {!questions.length ? <div className="card"><p>Nenhuma questão cadastrada.</p></div> : <div className="question-grid">
-        {questions.map((q) => <article className={`question-card ${q.is_hidden ? "hidden-card" : ""}`} key={q.id}>
+      <div className="library-heading"><div><h2>Questões cadastradas</h2><p>{filteredQuestions.length} de {questions.length} questão(ões).</p></div></div>
+      <div className="library-filters">
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por texto ou ID" />
+        <select value={disciplineFilter} onChange={(e) => { setDisciplineFilter(e.target.value); setSubjectFilter(""); }}><option value="">Todas as disciplinas</option>{disciplines.map((x) => <option key={x}>{x}</option>)}</select>
+        <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}><option value="">Todos os assuntos</option>{subjects.filter((x) => !disciplineFilter || questions.some((q) => q.discipline === disciplineFilter && q.subject === x)).map((x) => <option key={x}>{x}</option>)}</select>
+        <select value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value)}><option value="">Todas as dificuldades</option><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select>
+        <select value={visibilityFilter} onChange={(e) => setVisibilityFilter(e.target.value)}><option value="all">Visíveis e ocultas</option><option value="visible">Somente visíveis</option><option value="hidden">Somente ocultas</option></select>
+      </div>
+      {!questions.length ? <div className="card"><p>Nenhuma questão cadastrada.</p></div> : !filteredQuestions.length ? <div className="card"><p>Nenhuma questão encontrada com esses filtros.</p></div> : <div className="question-grid">
+        {filteredQuestions.map((q) => <article className={`question-card ${q.is_hidden ? "hidden-card" : ""}`} key={q.id}>
           <div className="card-top"><span className="question-id">ID {String(q.id).slice(0, 8)}</span><span className={`difficulty ${q.difficulty_current || q.difficulty_initial || "media"}`}>{q.difficulty_current || q.difficulty_initial || "media"}</span></div>
           <h3>{q.discipline || "Sem disciplina"}</h3>
           <p className="question-subject">{q.subject || "Sem assunto"}</p>
@@ -821,9 +843,13 @@ function DraftEditor({ q, patchDraft, questions }) {
   );
 }
 function FormattedQuestionText({ text }) {
-  const lines = String(text || "")
-    // PDFs frequentemente unem os itens I, II, III… ao parágrafo anterior.
+  const normalized = String(text || "")
+    // A extração do PDF costuma criar uma quebra em cada linha visual; elas viram espaços.
+    .replace(/\s+/g, " ")
+    // Apenas itens enumerados passam a iniciar uma linha própria.
     .replace(/\s+(?=(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\.\s)/g, "\n")
+    .trim();
+  const lines = normalized
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean);

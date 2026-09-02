@@ -302,6 +302,20 @@ button.annulled {
 .library-heading h2,
 .library-heading p { margin: 0; }
 .library-heading p { color: #6d7588; margin-top: 5px; }
+.library-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(150px, 1fr));
+  gap: 9px;
+  margin-bottom: 16px;
+}
+.library-filters input,
+.library-filters select {
+  width: 100%;
+  border: 1px solid #cbd3e2;
+  border-radius: 9px;
+  padding: 10px 11px;
+  background: white;
+}
 .question-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
@@ -342,9 +356,10 @@ button.annulled {
 }
 .question-statement {
   font-size: 19px;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1.45;
   text-align: justify;
+  text-align-last: left;
   hyphens: auto;
   margin: 16px 0;
 }
@@ -535,4 +550,5 @@ button.annulled {
   .bulk-tools button {
     width: 100%;
   }
+  .library-filters { grid-template-columns: 1fr; }
 }

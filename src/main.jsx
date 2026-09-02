@@ -172,6 +172,9 @@ function parseQuestions(text) {
         correct_option: "",
         discipline: "",
         subject: "",
+        banca: "",
+        ano: "",
+        concurso: "",
         explanation: "",
         difficulty_initial: "media",
         difficulty_current: "media",
@@ -210,7 +213,10 @@ function parseAnswerKey(text) {
 
 function App() {
   const [session, setSession] = React.useState(undefined),
-    [tab, setTab] = React.useState("cadastro"),
+    [tab, setTab] = React.useState("inicio"),
+    [adminTab, setAdminTab] = React.useState("overview"),
+    [area, setArea] = React.useState("user"),
+    [profile, setProfile] = React.useState(undefined),
     [questions, setQuestions] = React.useState([]),
     [drafts, setDrafts] = React.useState([]),
     [raw, setRaw] = React.useState(""),
@@ -222,6 +228,13 @@ function App() {
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => data.subscription.unsubscribe();
   }, []);
+  const loadProfile = React.useCallback(async () => {
+    if (!session?.user) return setProfile(null);
+    const { data, error } = await supabase.from("profiles").select("id,email,role").eq("id", session.user.id).maybeSingle();
+    if (error) { setNotice(`Não foi possível carregar seu perfil: ${error.message}`); setProfile({ role: "user", email: session.user.email }); }
+    else setProfile(data || { role: "user", email: session.user.email });
+  }, [session]);
+  React.useEffect(() => { loadProfile(); }, [loadProfile]);
   const load = React.useCallback(async () => {
     if (!session) return;
     const { data, error } = await supabase
@@ -234,8 +247,9 @@ function App() {
   React.useEffect(() => {
     load();
   }, [load]);
-  if (session === undefined) return <div className="center">Carregando…</div>;
+  if (session === undefined || (session && profile === undefined)) return <div className="center">Carregando…</div>;
   if (!session) return <Auth />;
+  const isAdmin = profile?.role === "admin";
   async function readPdf(file) {
     setBusy(true);
     setNotice("Lendo PDF…");
@@ -398,6 +412,9 @@ function App() {
       difficulty_current: q.difficulty_current || q.difficulty_initial || "media",
       ai_confidence: q.ai_confidence,
       ai_analyzed_at: q.ai_analyzed_at,
+      banca: q.banca?.trim() || null,
+      ano: q.ano ? Number(q.ano) : null,
+      concurso: q.concurso?.trim() || null,
     };
   }
   async function saveBatch(mode = "selected") {
@@ -460,108 +477,49 @@ function App() {
     }
     return !error;
   }
+  function openAdmin(target = "overview") {
+    if (!isAdmin) return setNotice("Acesso restrito ao administrador.");
+    setArea("admin");
+    setAdminTab(target);
+  }
+  function openUser(target = "inicio") { setArea("user"); setTab(target); }
+  const cadastroContent = (
+    <section>
+      <div className="steps" aria-label="Etapas do cadastro">
+        <div className={`step ${!drafts.length ? "active" : "done"}`}><span>1</span><div><b>Importar prova</b><small>PDF ou texto</small></div></div>
+        <div className={`step ${drafts.length && !answerKey ? "active" : answerKey ? "done" : ""}`}><span>2</span><div><b>Aplicar gabarito</b><small>Respostas em lote</small></div></div>
+        <div className={`step ${drafts.length && answerKey ? "active" : ""}`}><span>3</span><div><b>Analisar e revisar</b><small>IA em lotes de 5</small></div></div>
+        <div className={`step ${drafts.some((q) => q.aiStatus === "analyzed") ? "active" : ""}`}><span>4</span><div><b>Salvar questões</b><small>Somente após revisão</small></div></div>
+      </div>
+      <div className="card">
+        <h2>Importar prova</h2><p>O PDF é lido no navegador e não é armazenado.</p>
+        <label className="drop">{busy ? "Processando…" : "Selecionar PDF"}<input hidden type="file" accept="application/pdf" onChange={(e) => e.target.files[0] && readPdf(e.target.files[0])} /></label>
+        <div className="sep">ou cole o texto</div>
+        <textarea rows="9" value={raw} onChange={(e) => setRaw(e.target.value)} placeholder={"1. Enunciado…\nA) Alternativa…"} />
+        <button disabled={busy} onClick={process}>Separar questões</button>
+        <div className="answer-key"><h3>Aplicar gabarito</h3><p>Cole o gabarito após separar as questões. Use * ou X para anuladas.</p><textarea rows="4" value={answerKey} onChange={(e) => setAnswerKey(e.target.value)} placeholder="1 D 2 B 3 E 4 * 5 A" /><button type="button" onClick={applyAnswerKey}>Preencher respostas corretas</button></div>
+      </div>
+      {drafts.length > 0 && <BatchReview drafts={drafts} setDrafts={setDrafts} questions={questions} busy={busy} analyzeSelected={analyzeSelected} saveBatch={saveBatch} deleteSelected={deleteSelected} applyBulk={applyBulk} />}
+    </section>
+  );
   return (
-    <main>
-      <header>
-        <div>
-          <h1>Caderno de Questões</h1>
-          <small>{session.user.email}</small>
-        </div>
-        <button className="light" onClick={() => supabase.auth.signOut()}>
-          Sair
-        </button>
+    <main className="app-shell">
+      <header className="app-header">
+        <button className="brand" onClick={() => openUser("inicio")}><span className="brand-mark">CQ</span><span><b>Caderno de Questões</b><small>Estude. Resolva. Evolua.</small></span></button>
+        <details className="profile-menu"><summary><span className="avatar">{(profile?.email || session.user.email || "U")[0].toUpperCase()}</span><span className="profile-name">{profile?.email || session.user.email}</span><span>⌄</span></summary><div><button onClick={() => openUser("inicio")}>Minha conta</button><button onClick={() => setNotice("Preferências estarão disponíveis em breve.")}>Preferências</button>{isAdmin && <button onClick={() => openAdmin()}>Painel administrativo</button>}<button onClick={() => supabase.auth.signOut()}>Sair</button></div></details>
       </header>
-      <nav>
-        {[
-          ["cadastro", "Cadastro"],
-          ["questoes", `Questões (${questions.length})`],
-          ["estudos", "Estudos"],
-        ].map(([id, l]) => (
-          <button
-            className={tab === id ? "active" : ""}
-            onClick={() => setTab(id)}
-            key={id}
-          >
-            {l}
-          </button>
-        ))}
-      </nav>
       {notice && (
         <div className="notice">
           {notice}
           <button onClick={() => setNotice("")}>×</button>
         </div>
       )}
-      {tab === "cadastro" && (
-        <section>
-          <div className="steps" aria-label="Etapas do cadastro">
-            <div className={`step ${!drafts.length ? "active" : "done"}`}><span>1</span><div><b>Importar prova</b><small>PDF ou texto</small></div></div>
-            <div className={`step ${drafts.length && !answerKey ? "active" : answerKey ? "done" : ""}`}><span>2</span><div><b>Aplicar gabarito</b><small>Respostas em lote</small></div></div>
-            <div className={`step ${drafts.length && answerKey ? "active" : ""}`}><span>3</span><div><b>Analisar e revisar</b><small>IA em lotes de 10</small></div></div>
-            <div className={`step ${drafts.some((q) => q.aiStatus === "analyzed") ? "active" : ""}`}><span>4</span><div><b>Salvar questões</b><small>Somente após revisão</small></div></div>
-          </div>
-          <div className="card">
-            <h2>Importar prova</h2>
-            <p>O PDF é lido no navegador e não é armazenado.</p>
-            <label className="drop">
-              {busy ? "Processando…" : "Selecionar PDF"}
-              <input
-                hidden
-                type="file"
-                accept="application/pdf"
-                onChange={(e) =>
-                  e.target.files[0] && readPdf(e.target.files[0])
-                }
-              />
-            </label>
-            <div className="sep">ou cole o texto</div>
-            <textarea
-              rows="9"
-              value={raw}
-              onChange={(e) => setRaw(e.target.value)}
-              placeholder={"1. Enunciado…\nA) Alternativa…"}
-            />
-            <button disabled={busy} onClick={process}>Separar questões</button>
-            <div className="answer-key">
-              <h3>Aplicar gabarito</h3>
-              <p>
-                Cole o gabarito após separar as questões. Use * ou X para anuladas.
-              </p>
-              <textarea
-                rows="4"
-                value={answerKey}
-                onChange={(e) => setAnswerKey(e.target.value)}
-                placeholder="1 D 2 B 3 E 4 * 5 A"
-              />
-              <button type="button" onClick={applyAnswerKey}>
-                Preencher respostas corretas
-              </button>
-            </div>
-          </div>
-          {drafts.length > 0 && (
-            <BatchReview
-              drafts={drafts}
-              setDrafts={setDrafts}
-              questions={questions}
-              busy={busy}
-              analyzeSelected={analyzeSelected}
-              saveBatch={saveBatch}
-              deleteSelected={deleteSelected}
-              applyBulk={applyBulk}
-            />
-          )}
-        </section>
-      )}
-      {tab === "questoes" && (
-        <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} />
-      )}
-      {tab === "estudos" && (
-        <Study
-          questions={questions}
-          supabase={supabase}
-          userId={session.user.id}
-        />
-      )}
+      {area === "user" ? <>
+        <nav className="user-nav">{[["inicio", "Início"], ["estudos", "Estudos"], ["desempenho", "Desempenho"]].map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{label}</button>)}</nav>
+        {tab === "inicio" && <UserHome questions={questions} userId={session.user.id} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} />}
+        {tab === "estudos" && <Study questions={questions} supabase={supabase} userId={session.user.id} />}
+        {tab === "desempenho" && <Performance questions={questions} userId={session.user.id} supabase={supabase} goStudy={() => setTab("estudos")} />}
+      </> : isAdmin ? <section className="admin-layout"><aside className="admin-sidebar"><button className="admin-back" onClick={() => openUser("inicio")}>← Área do aluno</button><h2>Painel administrativo</h2><small>Gestão do acervo</small>{[["overview", "Visão geral"], ["cadastro", "Cadastro"], ["questoes", "Questões"]].map(([id, label]) => <button key={id} className={adminTab === id ? "active" : ""} onClick={() => setAdminTab(id)}>{label}</button>)}</aside><div className="admin-content">{adminTab === "overview" && <AdminOverview questions={questions} supabase={supabase} />}{adminTab === "cadastro" && cadastroContent}{adminTab === "questoes" && <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} />}</div></section> : <section className="card"><h2>Acesso restrito</h2><p>Esta área é exclusiva para administradores.</p><button onClick={() => openUser("inicio")}>Voltar ao início</button></section>}
     </main>
   );
 }
@@ -613,6 +571,56 @@ function Auth() {
   );
 }
 
+function useAnswerHistory(supabase, userId) {
+  const [answers, setAnswers] = React.useState([]);
+  React.useEffect(() => {
+    let alive = true;
+    supabase.from("answers").select("question_id,is_correct,answered_at").eq("user_id", userId).order("answered_at", { ascending: true }).then(({ data }) => { if (alive) setAnswers(data || []); });
+    return () => { alive = false; };
+  }, [supabase, userId]);
+  return answers;
+}
+function useCompletedCycles(supabase, userId) {
+  const [count, setCount] = React.useState(0);
+  React.useEffect(() => { let alive = true; supabase.from("study_cycles").select("id", { count: "exact", head: true }).eq("user_id", userId).not("completed_at", "is", null).then(({ count: total }) => { if (alive) setCount(total || 0); }); return () => { alive = false; }; }, [supabase, userId]);
+  return count;
+}
+function greetingName() {
+  const hour = new Date().getHours();
+  return hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+}
+function answerMetrics(answers, questions) {
+  const byId = new Map(questions.map((q) => [q.id, q]));
+  const total = answers.length;
+  const correct = answers.filter((a) => a.is_correct).length;
+  const recent = answers.slice(-20);
+  const recentRate = recent.length ? Math.round((recent.filter((a) => a.is_correct).length / recent.length) * 100) : 0;
+  const activeDays = new Set(answers.map((a) => new Date(a.answered_at).toLocaleDateString("en-CA")));
+  let streak = 0, cursor = new Date();
+  while (activeDays.has(cursor.toLocaleDateString("en-CA"))) { streak += 1; cursor.setDate(cursor.getDate() - 1); }
+  const areas = new Map();
+  answers.forEach((a) => { const q = byId.get(a.question_id); const key = q?.discipline || "Sem disciplina"; const value = areas.get(key) || { total: 0, correct: 0 }; value.total += 1; if (a.is_correct) value.correct += 1; areas.set(key, value); });
+  const ranked = [...areas.entries()].map(([name, value]) => ({ name, ...value, rate: Math.round((value.correct / value.total) * 100) })).filter((x) => x.total >= 1).sort((a, b) => b.rate - a.rate);
+  return { total, correct, rate: total ? Math.round((correct / total) * 100) : 0, recentRate, streak, best: ranked[0], focus: [...ranked].sort((a, b) => a.rate - b.rate)[0], days: answers.slice(-7) };
+}
+function UserHome({ questions, userId, email, supabase, goStudy }) {
+  const answers = useAnswerHistory(supabase, userId);
+  const completedCycles = useCompletedCycles(supabase, userId);
+  const metrics = answerMetrics(answers, questions);
+  const name = String(email || "").toLowerCase() === "pfarolfe@gmail.com" ? "Pedro" : (String(email || "estudante").split("@")[0].split(/[._-]/)[0] || "estudante");
+  const last = answers.at(-1)?.answered_at ? new Date(answers.at(-1).answered_at).toLocaleDateString("pt-BR") : "Ainda não houve atividade";
+  return <section className="user-home">
+    <div className="home-hero"><div><span className="eyebrow">SEU ESPAÇO DE ESTUDOS</span><h1>{greetingName()}, {name}</h1><p>Vamos continuar de onde você parou?</p><button onClick={goStudy}>Continuar estudos →</button></div><div className="hero-icon">⌁</div></div>
+    <div className="metric-grid"><MetricCard label="Questões respondidas" value={metrics.total} icon="◉" /><MetricCard label="Taxa de acertos" value={`${metrics.rate}%`} icon="✓" /><MetricCard label="Ciclos concluídos" value={completedCycles} icon="◌" /><MetricCard label="Sequência de estudos" value={`${metrics.streak} dia${metrics.streak === 1 ? "" : "s"}`} icon="↗" /></div>
+    <div className="home-grid"><section className="card continue-card"><span className="eyebrow">CONTINUAR ESTUDANDO</span><h2>{metrics.total ? "Seu próximo ciclo está pronto" : "Inicie seu primeiro ciclo"}</h2><div className="continue-info"><span>Última atividade: {last}</span><span>{metrics.total ? `${metrics.recentRate}% de acertos recentes` : "Escolha uma disciplina e comece"}</span></div><button onClick={goStudy}>{metrics.total ? "Continuar ciclo" : "Novo ciclo"}</button></section><section className="card performance-card"><span className="eyebrow">SEU DESEMPENHO</span><h2>Histórico recente</h2><MiniChart answers={metrics.days} /><div className="performance-lines"><span>Melhor disciplina <b>{metrics.best?.name || "—"}</b></span><span>Média recente <b>{metrics.recentRate}%</b></span></div></section></div>
+    <section className="focus-home"><div><span>◎</span><div><b>FOCO RECOMENDADO</b><p>{metrics.focus ? `${metrics.focus.name}: aproveite para revisar esta disciplina, onde sua taxa está em ${metrics.focus.rate}%.` : "Resolva algumas questões para receber uma recomendação personalizada."}</p></div></div><button className="light" onClick={goStudy}>Revisar agora</button></section>
+  </section>;
+}
+function MetricCard({ label, value, icon }) { return <article className="metric-card"><span>{icon}</span><small>{label}</small><b>{value}</b></article>; }
+function MiniChart({ answers }) { const points = answers.map((a, i) => `${i * 28 + 8},${a.is_correct ? 12 : 52}`).join(" "); return <svg className="mini-chart" viewBox="0 0 190 65" role="img" aria-label="Evolução recente"><path d="M4 57H186" stroke="#e3e9f5" /><polyline points={points || "8,52 180,52"} fill="none" stroke="#1463df" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
+function Performance({ questions, userId, supabase, goStudy }) { const answers = useAnswerHistory(supabase, userId); const metrics = answerMetrics(answers, questions); return <section className="card performance-page"><span className="eyebrow">DESEMPENHO</span><h1>Seu progresso</h1><p>Os dados abaixo são calculados a partir das suas respostas registradas.</p><div className="metric-grid"><MetricCard label="Respondidas" value={metrics.total} icon="◉" /><MetricCard label="Acertos" value={metrics.correct} icon="✓" /><MetricCard label="Taxa geral" value={`${metrics.rate}%`} icon="↗" /><MetricCard label="Média recente" value={`${metrics.recentRate}%`} icon="◌" /></div><h2>Evolução recente</h2><MiniChart answers={metrics.days} /><div className="performance-lines"><span>Melhor disciplina <b>{metrics.best?.name || "—"}</b></span><span>Disciplina que merece atenção <b>{metrics.focus?.name || "—"}</b></span></div><button onClick={goStudy}>Voltar aos estudos</button></section>; }
+function AdminOverview({ questions, supabase }) { const [userCount, setUserCount] = React.useState(null); React.useEffect(() => { supabase.from("profiles").select("id", { count: "exact", head: true }).then(({ count }) => setUserCount(count ?? 0)); }, [supabase]); const visible = questions.filter((q) => !q.is_hidden).length; const disciplines = new Set(questions.map((q) => q.discipline).filter(Boolean)).size; const boards = new Set(questions.map((q) => q.banca).filter(Boolean)).size; return <section className="admin-overview"><div><span className="eyebrow">PAINEL ADMINISTRATIVO</span><h1>Visão geral</h1><p>Dados reais do acervo disponível no sistema.</p></div><div className="metric-grid admin-metrics"><MetricCard label="Questões cadastradas" value={questions.length} icon="▤" /><MetricCard label="Questões visíveis" value={visible} icon="◉" /><MetricCard label="Questões ocultas" value={questions.length - visible} icon="◌" /><MetricCard label="Disciplinas" value={disciplines} icon="▥" /><MetricCard label="Bancas" value={boards} icon="◈" /><MetricCard label="Usuários cadastrados" value={userCount == null ? "…" : userCount} icon="◉" /></div></section>; }
+
 function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
   const [editingId, setEditingId] = React.useState(null);
   const [draft, setDraft] = React.useState(null);
@@ -621,14 +629,22 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
   const [subjectFilter, setSubjectFilter] = React.useState("");
   const [difficultyFilter, setDifficultyFilter] = React.useState("");
   const [visibilityFilter, setVisibilityFilter] = React.useState("all");
+  const [showMoreFilters, setShowMoreFilters] = React.useState(false);
+  const [boardFilter, setBoardFilter] = React.useState("");
+  const [yearFilter, setYearFilter] = React.useState("");
+  const [contestFilter, setContestFilter] = React.useState("");
   const disciplines = [...new Set(questions.map((q) => q.discipline).filter(Boolean))].sort();
   const subjects = [...new Set(questions.map((q) => q.subject).filter(Boolean))].sort();
+  const boards = [...new Set(questions.map((q) => q.banca).filter(Boolean))].sort();
+  const years = [...new Set(questions.map((q) => q.ano).filter(Boolean))].sort((a, b) => b - a);
+  const contests = [...new Set(questions.map((q) => q.concurso).filter(Boolean))].sort();
   const filteredQuestions = questions.filter((q) => {
     const searchable = `${q.id} ${q.statement} ${q.discipline || ""} ${q.subject || ""}`.toLowerCase();
     return (!search || searchable.includes(search.toLowerCase())) &&
       (!disciplineFilter || q.discipline === disciplineFilter) &&
       (!subjectFilter || q.subject === subjectFilter) &&
       (!difficultyFilter || (q.difficulty_current || q.difficulty_initial || "media") === difficultyFilter) &&
+      (!boardFilter || q.banca === boardFilter) && (!yearFilter || String(q.ano) === yearFilter) && (!contestFilter || q.concurso === contestFilter) &&
       (visibilityFilter === "all" || (visibilityFilter === "visible" ? !q.is_hidden : q.is_hidden));
   });
   const startEdit = (q) => {
@@ -641,7 +657,7 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
     const ok = await updateQuestion(draft.id, {
       statement: draft.statement.trim(), alternatives: draft.alternatives,
       correct_option: draft.correct_option, discipline: draft.discipline.trim(), subject: draft.subject.trim(),
-      explanation: draft.explanation?.trim() || null, difficulty_initial: draft.difficulty_initial || "media",
+      explanation: draft.explanation?.trim() || null, banca: draft.banca?.trim() || null, ano: draft.ano ? Number(draft.ano) : null, concurso: draft.concurso?.trim() || null, difficulty_initial: draft.difficulty_initial || "media",
       difficulty_current: draft.difficulty_current || draft.difficulty_initial || "media",
     });
     if (ok) { setEditingId(null); setDraft(null); }
@@ -655,18 +671,21 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
         <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}><option value="">Todos os assuntos</option>{subjects.filter((x) => !disciplineFilter || questions.some((q) => q.discipline === disciplineFilter && q.subject === x)).map((x) => <option key={x}>{x}</option>)}</select>
         <select value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value)}><option value="">Todas as dificuldades</option><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select>
         <select value={visibilityFilter} onChange={(e) => setVisibilityFilter(e.target.value)}><option value="all">Visíveis e ocultas</option><option value="visible">Somente visíveis</option><option value="hidden">Somente ocultas</option></select>
+        <button className="light compact more-filters" onClick={() => setShowMoreFilters((value) => !value)}>{showMoreFilters ? "Menos filtros" : "Mais filtros"}</button>
       </div>
+      {showMoreFilters && <div className="library-filters more-filter-row"><select value={boardFilter} onChange={(e) => setBoardFilter(e.target.value)}><option value="">Todas as bancas</option>{boards.map((x) => <option key={x}>{x}</option>)}</select><select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}><option value="">Todos os anos</option>{years.map((x) => <option key={x}>{x}</option>)}</select><select value={contestFilter} onChange={(e) => setContestFilter(e.target.value)}><option value="">Todos os concursos</option>{contests.map((x) => <option key={x}>{x}</option>)}</select></div>}
       {!questions.length ? <div className="card"><p>Nenhuma questão cadastrada.</p></div> : !filteredQuestions.length ? <div className="card"><p>Nenhuma questão encontrada com esses filtros.</p></div> : <div className="question-grid">
         {filteredQuestions.map((q) => <article className={`question-card ${q.is_hidden ? "hidden-card" : ""}`} key={q.id}>
           <div className="card-top"><span className="question-id">ID {String(q.id).slice(0, 8)}</span><span className={`difficulty ${q.difficulty_current || q.difficulty_initial || "media"}`}>{q.difficulty_current || q.difficulty_initial || "media"}</span></div>
           <h3>{q.discipline || "Sem disciplina"}</h3>
           <p className="question-subject">{q.subject || "Sem assunto"}</p>
           <p className="question-preview">{q.statement}</p>
-          <div className="card-meta">Gabarito: {q.correct_option === "*" ? "Anulada" : q.correct_option} {q.is_hidden && <span className="hidden-label">Oculta dos estudos</span>}</div>
+          <div className="card-meta"><span>Gabarito: {q.correct_option === "*" ? "Anulada" : q.correct_option}</span>{(q.banca || q.ano || q.concurso) && <span className="question-origin">{q.banca && `Banca: ${q.banca}`}{q.ano && ` · Ano: ${q.ano}`}{q.concurso && ` · Concurso: ${q.concurso}`}</span>}{q.is_hidden && <span className="hidden-label">Oculta dos estudos</span>}</div>
           <div className="card-actions"><button className="light compact" onClick={() => editingId === q.id ? (setEditingId(null), setDraft(null)) : startEdit(q)}>{editingId === q.id ? "Fechar" : "Editar"}</button><button className="light compact" onClick={() => toggleHidden(q)}>{q.is_hidden ? "Exibir" : "Ocultar"}</button><button className="danger compact" onClick={() => remove(q.id)}>Excluir</button></div>
           {editingId === q.id && draft && <div className="saved-editor">
             <label>Enunciado<textarea rows="5" value={draft.statement} onChange={(e) => setDraft({ ...draft, statement: e.target.value })} /></label>
             <div className="cols"><label>Disciplina<input value={draft.discipline || ""} onChange={(e) => setDraft({ ...draft, discipline: e.target.value })} /></label><label>Assunto<input value={draft.subject || ""} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></label></div>
+            <div className="cols"><label>Banca<input value={draft.banca || ""} onChange={(e) => setDraft({ ...draft, banca: e.target.value })} /></label><label>Ano<input type="number" value={draft.ano || ""} onChange={(e) => setDraft({ ...draft, ano: e.target.value })} /></label></div><label>Concurso<input value={draft.concurso || ""} onChange={(e) => setDraft({ ...draft, concurso: e.target.value })} /></label>
             {draft.alternatives.map((a) => <label className="alt" key={a.letter}><input type="radio" name={`answer-${draft.id}`} checked={draft.correct_option === a.letter} onChange={() => setDraft({ ...draft, correct_option: a.letter, is_annulled: false })} /><b>{a.letter}</b><input value={a.text} onChange={(e) => changeAlternative(a.letter, e.target.value)} /></label>)}
             <div className="cols"><select value={draft.difficulty_initial || "media"} onChange={(e) => setDraft({ ...draft, difficulty_initial: e.target.value, difficulty_current: e.target.value })}><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select><button onClick={save}>Salvar alterações</button></div>
           </div>}
@@ -827,6 +846,8 @@ function DraftEditor({ q, patchDraft, questions }) {
           </datalist>
         </div>
       </div>
+      <div className="cols"><input placeholder="Banca" value={q.banca || ""} onChange={(e) => setField("banca", e.target.value)} /><input type="number" placeholder="Ano" value={q.ano || ""} onChange={(e) => setField("ano", e.target.value)} /></div>
+      <input placeholder="Concurso" value={q.concurso || ""} onChange={(e) => setField("concurso", e.target.value)} />
       <textarea
         rows="4"
         placeholder="Comentário explicativo"
@@ -865,6 +886,7 @@ function Study({ questions, supabase, userId }) {
     [choice, setChoice] = React.useState(""),
     [checked, setChecked] = React.useState(false),
     [finished, setFinished] = React.useState(false),
+    [cycleId, setCycleId] = React.useState(null),
     [celebration, setCelebration] = React.useState(false);
   const pool = questions.filter(
     (q) =>
@@ -881,13 +903,16 @@ function Study({ questions, supabase, userId }) {
     setChoice("");
     setChecked(false);
     setFinished(false);
-  }, []);
+    setCycleId(null);
+    if (picked.length) supabase.from("study_cycles").insert({ user_id: userId, total_questions: picked.length, discipline: discipline || null, subject: subject || null }).select("id").single().then(({ data }) => setCycleId(data?.id || null));
+  }, [supabase, userId, discipline, subject]);
   React.useEffect(() => {
     begin(pool, []);
   }, [questions, discipline, subject]);
   const q = cycle[pos];
+  function markCycleCompleted() { if (cycleId) supabase.from("study_cycles").update({ completed_at: new Date().toISOString() }).eq("id", cycleId); }
   function advance() {
-    if (pos + 1 >= cycle.length) setFinished(true);
+    if (pos + 1 >= cycle.length) { setFinished(true); markCycleCompleted(); }
     else {
       setPos((p) => p + 1);
       setChoice("");
@@ -936,6 +961,7 @@ function Study({ questions, supabase, userId }) {
   }
   function finishCycle() {
     setFinished(true);
+    markCycleCompleted();
   }
   if (!questions.length)
     return (

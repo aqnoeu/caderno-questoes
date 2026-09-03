@@ -526,7 +526,7 @@ function App() {
         </div>
       )}
       {area === "user" ? <>
-        {tab === "inicio" && <UserHome questions={questions} userId={session.user.id} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} />}
+        {tab === "inicio" && <UserHome questions={questions} userId={session.user.id} name={profile?.display_name} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} />}
         <div hidden={tab !== "estudos"}><Study questions={questions} supabase={supabase} userId={session.user.id} /></div>
         {tab === "desempenho" && <Performance questions={questions} userId={session.user.id} supabase={supabase} goStudy={() => setTab("estudos")} />}
         {tab === "perfil" && <UserProfile profile={profile} session={session} supabase={supabase} onProfileSaved={(values) => setProfile((current) => ({ ...current, ...values }))} />}
@@ -614,11 +614,11 @@ function answerMetrics(answers, questions) {
   const ranked = [...areas.entries()].map(([name, value]) => ({ name, ...value, rate: Math.round((value.correct / value.total) * 100) })).filter((x) => x.total >= 1).sort((a, b) => b.rate - a.rate);
   return { total, correct, rate: total ? Math.round((correct / total) * 100) : 0, recentRate, streak, best: ranked[0], focus: [...ranked].sort((a, b) => a.rate - b.rate)[0], days: answers.slice(-7) };
 }
-function UserHome({ questions, userId, email, supabase, goStudy }) {
+function UserHome({ questions, userId, name: profileName, email, supabase, goStudy }) {
   const answers = useAnswerHistory(supabase, userId);
   const completedCycles = useCompletedCycles(supabase, userId);
   const metrics = answerMetrics(answers, questions);
-  const name = String(email || "").toLowerCase() === "pfarolfe@gmail.com" ? "Pedro" : (String(email || "estudante").split("@")[0].split(/[._-]/)[0] || "estudante");
+  const name = profileName?.trim() || (String(email || "estudante").split("@")[0].split(/[._-]/)[0] || "estudante");
   const last = answers.at(-1)?.answered_at ? new Date(answers.at(-1).answered_at).toLocaleDateString("pt-BR") : "Ainda não houve atividade";
   return <section className="user-home">
     <div className="home-hero"><div><span className="eyebrow">SEU ESPAÇO DE ESTUDOS</span><h1>{greetingName()}, {name} <span aria-hidden="true">👋</span></h1><p>Vamos continuar de onde você parou?</p></div><button onClick={goStudy}>Continuar estudos <span>→</span></button><div className="hero-icon">⌁</div></div>

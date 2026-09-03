@@ -640,3 +640,14 @@ button.annulled {
   .user-nav button > span { font-size: 14px; }
   .profile-menu > div { top: 45px; min-width: 210px; }
 }
+
+/* Em notebook estreito e celular, marca, perfil e navegação ocupam linhas próprias. */
+@media (max-width: 900px) {
+  .app-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 18px 10px; min-height: 0; padding: 22px 0 18px; margin-bottom: 22px; }
+  .app-header .user-nav { position: relative; grid-column: 1 / -1; left: auto; bottom: auto; width: 100%; max-width: 100%; margin: 0; overflow-x: auto; justify-content: flex-start; }
+}
+@media (max-width: 650px) {
+  .app-header { min-height: 0; padding: 18px 0 16px; }
+  .app-header .user-nav { bottom: auto; width: 100%; max-width: 100%; }
+  .user-nav button { flex: 0 0 auto; padding: 10px 9px; }
+}

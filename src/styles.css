@@ -562,8 +562,8 @@ button.annulled {
 .sidebar-message { margin-top: 20px; padding: 18px; border-radius: 11px; background: linear-gradient(135deg, #eef6ff, #f7fbff); border: 1px solid #dbeaff; color: #165bca; }
 .sidebar-message b, .sidebar-message span { display: block; }.sidebar-message span { font-size: 13px; margin-top: 10px; line-height: 1.45; }
 .app-shell { max-width: 1440px; }
-.app-header { position: relative; isolation: isolate; min-height: 164px; padding: 27px 0 0; border-bottom: 1px solid #dce7f7; overflow: hidden; }
-.app-header::before { content: ""; position: absolute; z-index: -2; inset: 0 -220px 0 -220px; background: radial-gradient(ellipse at 74% 8%, #d9eaff 0, #edf5ff 24%, transparent 49%), linear-gradient(105deg, #fbfdff 5%, #f4f8ff 60%, #e7f1ff); }
+.app-header { position: relative; isolation: isolate; min-height: 164px; padding: 27px 0 0; border-bottom: 1px solid #dce7f7; overflow: visible; }
+.app-header::before { content: ""; position: absolute; z-index: -2; top: 0; bottom: 0; left: 50%; width: 100vw; transform: translateX(-50%); background: radial-gradient(ellipse at 74% 8%, #d9eaff 0, #edf5ff 24%, transparent 49%), linear-gradient(105deg, #fbfdff 5%, #f4f8ff 60%, #e7f1ff); }
 .app-header::after { content: ""; position: absolute; z-index: -1; width: 330px; height: 190px; right: 75px; bottom: -95px; border: 14px solid #b8d3fa99; border-radius: 30px 52px 24px 30px; transform: rotate(-13deg); box-shadow: -55px 10px 0 -12px #d7e6fb99, 54px -10px 0 -12px #d7e6fb99; opacity: .72; }
 .brand { padding: 0; background: transparent; color: #112555; display: flex; align-items: center; gap: 14px; text-align: left; }
 .brand:hover { background: transparent; }.brand b, .brand small { display: block; }.brand b { font-size: 30px; letter-spacing: -.035em; }.brand small { color: #3d5d98; font-size: 15px; margin-top: 4px; font-weight: 500; }

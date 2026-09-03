@@ -505,7 +505,7 @@ function App() {
   return (
     <main className="app-shell">
       <header className="app-header">
-        <button className="brand" onClick={() => openUser("inicio")}><span className="brand-mark">CQ</span><span><b>Caderno de Questões</b><small>Estude. Resolva. Evolua.</small></span></button>
+        <button className="brand" onClick={() => openUser("inicio")}><span className="brand-mark">✓</span><span><b>Caderno de Questões</b><small>Estude. Resolva. Evolua.</small></span></button>
         <details className="profile-menu"><summary><span className="avatar">{(profile?.email || session.user.email || "U")[0].toUpperCase()}</span><span className="profile-name">{profile?.email || session.user.email}</span><span>⌄</span></summary><div><button onClick={() => openUser("inicio")}>Minha conta</button><button onClick={() => setNotice("Preferências estarão disponíveis em breve.")}>Preferências</button>{isAdmin && <button onClick={() => openAdmin()}>Painel administrativo</button>}<button onClick={() => supabase.auth.signOut()}>Sair</button></div></details>
       </header>
       {notice && (
@@ -515,7 +515,7 @@ function App() {
         </div>
       )}
       {area === "user" ? <>
-        <nav className="user-nav">{[["inicio", "Início"], ["estudos", "Estudos"], ["desempenho", "Desempenho"]].map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{label}</button>)}</nav>
+        <nav className="user-nav">{[["inicio", "⌂", "Início"], ["estudos", "▤", "Estudos"], ["desempenho", "▥", "Desempenho"]].map(([id, icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><span aria-hidden="true">{icon}</span>{label}</button>)}</nav>
         {tab === "inicio" && <UserHome questions={questions} userId={session.user.id} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} />}
         {tab === "estudos" && <Study questions={questions} supabase={supabase} userId={session.user.id} />}
         {tab === "desempenho" && <Performance questions={questions} userId={session.user.id} supabase={supabase} goStudy={() => setTab("estudos")} />}
@@ -610,7 +610,7 @@ function UserHome({ questions, userId, email, supabase, goStudy }) {
   const name = String(email || "").toLowerCase() === "pfarolfe@gmail.com" ? "Pedro" : (String(email || "estudante").split("@")[0].split(/[._-]/)[0] || "estudante");
   const last = answers.at(-1)?.answered_at ? new Date(answers.at(-1).answered_at).toLocaleDateString("pt-BR") : "Ainda não houve atividade";
   return <section className="user-home">
-    <div className="home-hero"><div><span className="eyebrow">SEU ESPAÇO DE ESTUDOS</span><h1>{greetingName()}, {name}</h1><p>Vamos continuar de onde você parou?</p><button onClick={goStudy}>Continuar estudos →</button></div><div className="hero-icon">⌁</div></div>
+    <div className="home-hero"><div><span className="eyebrow">SEU ESPAÇO DE ESTUDOS</span><h1>{greetingName()}, {name} <span aria-hidden="true">👋</span></h1><p>Vamos continuar de onde você parou?</p></div><button onClick={goStudy}>Continuar estudos <span>→</span></button><div className="hero-icon">⌁</div></div>
     <div className="metric-grid"><MetricCard label="Questões respondidas" value={metrics.total} icon="◉" /><MetricCard label="Taxa de acertos" value={`${metrics.rate}%`} icon="✓" /><MetricCard label="Ciclos concluídos" value={completedCycles} icon="◌" /><MetricCard label="Sequência de estudos" value={`${metrics.streak} dia${metrics.streak === 1 ? "" : "s"}`} icon="↗" /></div>
     <div className="home-grid"><section className="card continue-card"><span className="eyebrow">CONTINUAR ESTUDANDO</span><h2>{metrics.total ? "Seu próximo ciclo está pronto" : "Inicie seu primeiro ciclo"}</h2><div className="continue-info"><span>Última atividade: {last}</span><span>{metrics.total ? `${metrics.recentRate}% de acertos recentes` : "Escolha uma disciplina e comece"}</span></div><button onClick={goStudy}>{metrics.total ? "Continuar ciclo" : "Novo ciclo"}</button></section><section className="card performance-card"><span className="eyebrow">SEU DESEMPENHO</span><h2>Histórico recente</h2><MiniChart answers={metrics.days} /><div className="performance-lines"><span>Melhor disciplina <b>{metrics.best?.name || "—"}</b></span><span>Média recente <b>{metrics.recentRate}%</b></span></div></section></div>
     <section className="focus-home"><div><span>◎</span><div><b>FOCO RECOMENDADO</b><p>{metrics.focus ? `${metrics.focus.name}: aproveite para revisar esta disciplina, onde sua taxa está em ${metrics.focus.rate}%.` : "Resolva algumas questões para receber uma recomendação personalizada."}</p></div></div><button className="light" onClick={goStudy}>Revisar agora</button></section>

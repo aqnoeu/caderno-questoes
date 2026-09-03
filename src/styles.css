@@ -629,3 +629,14 @@ button.annulled {
   .library-filters { grid-template-columns: 1fr; }
   .profile-name { display: none; }.app-header { min-height: 126px; padding-top: 20px; }.app-header::after { display: none; }.brand { gap: 10px; }.brand b { font-size: 19px; }.brand small { font-size: 11px; }.brand-mark { width: 40px; height: 40px; font-size: 21px; border-width: 2px; }.profile-menu summary { min-height: 45px; padding: 5px 8px; background: #ffffffc7; }.avatar { width: 31px; height: 31px; }.app-header .user-nav { width: auto; left: 0; bottom: 0; gap: 14px; }.user-nav button { flex: 0 0 auto; padding: 11px 2px; font-size: 13px; }.user-nav button > span { font-size: 16px; }.home-hero { align-items: flex-start; flex-direction: column; padding: 23px; min-height: 177px; gap: 17px; }.home-hero h1 { font-size: 25px; }.home-hero p { font-size: 14px; }.home-hero button { min-width: 0; width: 100%; }.hero-icon { display: none; }.metric-grid { grid-template-columns: 1fr 1fr; }.home-grid, .admin-layout { grid-template-columns: 1fr; }.focus-home { align-items: flex-start; gap: 12px; flex-direction: column; }.admin-sidebar { min-height: 0; border-right: 0; border-bottom: 1px solid #e2e7f0; display: flex; gap: 6px; flex-wrap: wrap; padding: 5px 0 15px; }.admin-sidebar h2, .admin-sidebar small { width: 100%; }.admin-sidebar > button { width: auto; }.admin-sidebar .admin-back { width: 100%; }.admin-metrics { grid-template-columns: 1fr 1fr; }.more-filter-row { grid-template-columns: 1fr; }
 }
+
+/* O menu encosta no seletor de perfil: não há mais uma faixa que fecha o painel. */
+.profile-menu > div { top: 64px; }
+
+@media (max-width: 650px) {
+  .app-header { min-height: 166px; padding-top: 18px; margin-bottom: 22px; }
+  .app-header .user-nav { bottom: 15px; max-width: calc(100vw - 22px); overflow-x: auto; gap: 4px; padding: 5px; }
+  .user-nav button { padding: 10px 9px; gap: 5px; white-space: nowrap; }
+  .user-nav button > span { font-size: 14px; }
+  .profile-menu > div { top: 45px; min-width: 210px; }
+}

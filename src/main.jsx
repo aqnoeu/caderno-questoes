@@ -888,6 +888,9 @@ function Study({ questions, supabase, userId }) {
     [finished, setFinished] = React.useState(false),
     [cycleId, setCycleId] = React.useState(null),
     [celebration, setCelebration] = React.useState(false);
+  const restoredCycle = React.useRef(false);
+  const skipRestoredFilterChange = React.useRef(false);
+  const cycleStorageKey = `caderno-questoes:study-cycle:${userId}`;
   const pool = questions.filter(
     (q) =>
       !q.is_annulled && !q.is_hidden && q.correct_option !== "*" &&
@@ -907,8 +910,43 @@ function Study({ questions, supabase, userId }) {
     if (picked.length) supabase.from("study_cycles").insert({ user_id: userId, total_questions: picked.length, discipline: discipline || null, subject: subject || null }).select("id").single().then(({ data }) => setCycleId(data?.id || null));
   }, [supabase, userId, discipline, subject]);
   React.useEffect(() => {
+    if (!questions.length) return;
+    // Só na primeira abertura: recupera exatamente o ciclo que estava em andamento.
+    if (!restoredCycle.current) {
+      restoredCycle.current = true;
+      try {
+        const saved = JSON.parse(window.localStorage.getItem(cycleStorageKey) || "null");
+        const byId = new Map(questions.map((item) => [item.id, item]));
+        const savedCycle = (saved?.questionIds || []).map((id) => byId.get(id)).filter(Boolean);
+        if (savedCycle.length === (saved?.questionIds || []).length && savedCycle.length) {
+          skipRestoredFilterChange.current = (saved.discipline || "") !== discipline || (saved.subject || "") !== subject;
+          setDiscipline(saved.discipline || "");
+          setSubject(saved.subject || "");
+          setCycle(savedCycle);
+          setRemaining((saved.remainingIds || []).map((id) => byId.get(id)).filter(Boolean));
+          setStatus(saved.status?.length === savedCycle.length ? saved.status : savedCycle.map(() => null));
+          setPos(Math.min(Math.max(Number(saved.pos) || 0, 0), savedCycle.length - 1));
+          setChoice(saved.choice || "");
+          setChecked(Boolean(saved.checked));
+          setFinished(Boolean(saved.finished));
+          setCycleId(saved.cycleId || null);
+          return;
+        }
+      } catch { /* um estado inválido não impede o início de um novo ciclo */ }
+    }
+    if (skipRestoredFilterChange.current) {
+      skipRestoredFilterChange.current = false;
+      return;
+    }
     begin(pool, []);
   }, [questions, discipline, subject]);
+  React.useEffect(() => {
+    if (!cycle.length) return;
+    window.localStorage.setItem(cycleStorageKey, JSON.stringify({
+      questionIds: cycle.map((item) => item.id), remainingIds: remaining.map((item) => item.id), status,
+      pos, choice, checked, finished, cycleId, discipline, subject,
+    }));
+  }, [cycle, remaining, status, pos, choice, checked, finished, cycleId, discipline, subject, cycleStorageKey]);
   const q = cycle[pos];
   function markCycleCompleted() { if (cycleId) supabase.from("study_cycles").update({ completed_at: new Date().toISOString() }).eq("id", cycleId); }
   function advance() {

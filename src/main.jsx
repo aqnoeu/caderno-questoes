@@ -28,6 +28,15 @@ const normalize = (t) =>
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+const splitSubjects = (value) =>
+  String(value || "")
+    .split(/\s*(?:[;|]|·|•)\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+const formatSubjects = (value) => [...new Set(splitSubjects(value))].join(" · ");
+const hasSubject = (question, subject) => !subject || splitSubjects(question.subject).includes(subject);
+const subjectOptions = (questions, discipline = "") =>
+  [...new Set(questions.filter((question) => !discipline || question.discipline === discipline).flatMap((question) => splitSubjects(question.subject)))].sort();
 const similarity = (a, b) => {
   const A = new Set(
       normalize(a)
@@ -343,6 +352,7 @@ function App() {
         for (let attempt = 1; attempt <= 3; attempt += 1) {
           const response = await supabase.functions.invoke("analyze-questions", {
             body: {
+              classification_instruction: "Em subject, indique todos os assuntos jurídicos relevantes. Quando houver mais de um, devolva uma única string separada por ' · '. Exemplo: 'Direitos LGBT+ · Legislação infraconstitucional'. Não use numeração.",
               questions: group.map((q, index) => ({
                 index,
                 statement: q.statement,
@@ -376,7 +386,7 @@ function App() {
           return result ? {
             ...q,
             discipline: result.discipline || q.discipline,
-            subject: result.subject || q.subject,
+            subject: formatSubjects(result.subject || q.subject),
             explanation: result.explanation || q.explanation,
             difficulty_initial: result.difficulty || "media",
             difficulty_current: result.difficulty || "media",
@@ -403,7 +413,7 @@ function App() {
       alternatives: q.alternatives,
       correct_option: q.correct_option,
       discipline: q.discipline?.trim() || null,
-      subject: q.subject?.trim() || null,
+      subject: formatSubjects(q.subject) || null,
       explanation: q.explanation?.trim() || null,
       normalized_statement: normalize(q.statement),
       original_number: q.original_number || null,
@@ -448,7 +458,7 @@ function App() {
     setDrafts((ds) => ds.map((q) => q.selected ? {
       ...q,
       discipline: discipline || q.discipline,
-      subject: subject || q.subject,
+      subject: formatSubjects(subject || q.subject),
     } : q));
     setNotice("Disciplina/assunto aplicados às questões selecionadas.");
   }
@@ -506,7 +516,8 @@ function App() {
     <main className="app-shell">
       <header className="app-header">
         <button className="brand" onClick={() => openUser("inicio")}><span className="brand-mark">✓</span><span><b>Caderno de Questões</b><small>Estude. Resolva. Evolua.</small></span></button>
-        <details className="profile-menu"><summary><span className="avatar">{(profile?.email || session.user.email || "U")[0].toUpperCase()}</span><span className="profile-name">{profile?.email || session.user.email}</span><span>⌄</span></summary><div><button onClick={() => openUser("inicio")}>Minha conta</button><button onClick={() => setNotice("Preferências estarão disponíveis em breve.")}>Preferências</button>{isAdmin && <button onClick={() => openAdmin()}>Painel administrativo</button>}<button onClick={() => supabase.auth.signOut()}>Sair</button></div></details>
+        <details className="profile-menu" onMouseLeave={(event) => event.currentTarget.removeAttribute("open")}><summary><span className="avatar">{(profile?.email || session.user.email || "U")[0].toUpperCase()}</span><span className="profile-name">{profile?.email || session.user.email}</span><span>⌄</span></summary><div><button onClick={() => openUser("inicio")}>Minha conta</button><button onClick={() => setNotice("Preferências estarão disponíveis em breve.")}>Preferências</button>{isAdmin && <button onClick={() => openAdmin()}>Painel administrativo</button>}<button onClick={() => supabase.auth.signOut()}>Sair</button></div></details>
+        {area === "user" && <nav className="user-nav">{[["inicio", "⌂", "Início"], ["estudos", "▤", "Estudos"], ["desempenho", "▥", "Desempenho"]].map(([id, icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><span aria-hidden="true">{icon}</span>{label}</button>)}</nav>}
       </header>
       {notice && (
         <div className="notice">
@@ -515,9 +526,8 @@ function App() {
         </div>
       )}
       {area === "user" ? <>
-        <nav className="user-nav">{[["inicio", "⌂", "Início"], ["estudos", "▤", "Estudos"], ["desempenho", "▥", "Desempenho"]].map(([id, icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><span aria-hidden="true">{icon}</span>{label}</button>)}</nav>
         {tab === "inicio" && <UserHome questions={questions} userId={session.user.id} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} />}
-        {tab === "estudos" && <Study questions={questions} supabase={supabase} userId={session.user.id} />}
+        <div hidden={tab !== "estudos"}><Study questions={questions} supabase={supabase} userId={session.user.id} /></div>
         {tab === "desempenho" && <Performance questions={questions} userId={session.user.id} supabase={supabase} goStudy={() => setTab("estudos")} />}
       </> : isAdmin ? <section className="admin-layout"><aside className="admin-sidebar"><button className="admin-back" onClick={() => openUser("inicio")}>← Área do aluno</button><h2>Painel administrativo</h2><small>Gestão do acervo</small>{[["overview", "Visão geral"], ["cadastro", "Cadastro"], ["questoes", "Questões"]].map(([id, label]) => <button key={id} className={adminTab === id ? "active" : ""} onClick={() => setAdminTab(id)}>{label}</button>)}</aside><div className="admin-content">{adminTab === "overview" && <AdminOverview questions={questions} supabase={supabase} />}{adminTab === "cadastro" && cadastroContent}{adminTab === "questoes" && <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} />}</div></section> : <section className="card"><h2>Acesso restrito</h2><p>Esta área é exclusiva para administradores.</p><button onClick={() => openUser("inicio")}>Voltar ao início</button></section>}
     </main>
@@ -634,7 +644,7 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
   const [yearFilter, setYearFilter] = React.useState("");
   const [contestFilter, setContestFilter] = React.useState("");
   const disciplines = [...new Set(questions.map((q) => q.discipline).filter(Boolean))].sort();
-  const subjects = [...new Set(questions.map((q) => q.subject).filter(Boolean))].sort();
+  const subjects = subjectOptions(questions);
   const boards = [...new Set(questions.map((q) => q.banca).filter(Boolean))].sort();
   const years = [...new Set(questions.map((q) => q.ano).filter(Boolean))].sort((a, b) => b - a);
   const contests = [...new Set(questions.map((q) => q.concurso).filter(Boolean))].sort();
@@ -642,7 +652,7 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
     const searchable = `${q.id} ${q.statement} ${q.discipline || ""} ${q.subject || ""}`.toLowerCase();
     return (!search || searchable.includes(search.toLowerCase())) &&
       (!disciplineFilter || q.discipline === disciplineFilter) &&
-      (!subjectFilter || q.subject === subjectFilter) &&
+      hasSubject(q, subjectFilter) &&
       (!difficultyFilter || (q.difficulty_current || q.difficulty_initial || "media") === difficultyFilter) &&
       (!boardFilter || q.banca === boardFilter) && (!yearFilter || String(q.ano) === yearFilter) && (!contestFilter || q.concurso === contestFilter) &&
       (visibilityFilter === "all" || (visibilityFilter === "visible" ? !q.is_hidden : q.is_hidden));
@@ -656,7 +666,7 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
     if (!draft.statement.trim() || !draft.discipline?.trim() || !draft.subject?.trim()) return;
     const ok = await updateQuestion(draft.id, {
       statement: draft.statement.trim(), alternatives: draft.alternatives,
-      correct_option: draft.correct_option, discipline: draft.discipline.trim(), subject: draft.subject.trim(),
+      correct_option: draft.correct_option, discipline: draft.discipline.trim(), subject: formatSubjects(draft.subject),
       explanation: draft.explanation?.trim() || null, banca: draft.banca?.trim() || null, ano: draft.ano ? Number(draft.ano) : null, concurso: draft.concurso?.trim() || null, difficulty_initial: draft.difficulty_initial || "media",
       difficulty_current: draft.difficulty_current || draft.difficulty_initial || "media",
     });
@@ -668,7 +678,7 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
       <div className="library-filters">
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por texto ou ID" />
         <select value={disciplineFilter} onChange={(e) => { setDisciplineFilter(e.target.value); setSubjectFilter(""); }}><option value="">Todas as disciplinas</option>{disciplines.map((x) => <option key={x}>{x}</option>)}</select>
-        <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}><option value="">Todos os assuntos</option>{subjects.filter((x) => !disciplineFilter || questions.some((q) => q.discipline === disciplineFilter && q.subject === x)).map((x) => <option key={x}>{x}</option>)}</select>
+        <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}><option value="">Todos os assuntos</option>{subjects.filter((x) => !disciplineFilter || questions.some((q) => q.discipline === disciplineFilter && hasSubject(q, x))).map((x) => <option key={x}>{x}</option>)}</select>
         <select value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value)}><option value="">Todas as dificuldades</option><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select>
         <select value={visibilityFilter} onChange={(e) => setVisibilityFilter(e.target.value)}><option value="all">Visíveis e ocultas</option><option value="visible">Somente visíveis</option><option value="hidden">Somente ocultas</option></select>
         <button className="light compact more-filters" onClick={() => setShowMoreFilters((value) => !value)}>{showMoreFilters ? "Menos filtros" : "Mais filtros"}</button>
@@ -684,7 +694,7 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
           <div className="card-actions"><button className="light compact" onClick={() => editingId === q.id ? (setEditingId(null), setDraft(null)) : startEdit(q)}>{editingId === q.id ? "Fechar" : "Editar"}</button><button className="light compact" onClick={() => toggleHidden(q)}>{q.is_hidden ? "Exibir" : "Ocultar"}</button><button className="danger compact" onClick={() => remove(q.id)}>Excluir</button></div>
           {editingId === q.id && draft && <div className="saved-editor">
             <label>Enunciado<textarea rows="5" value={draft.statement} onChange={(e) => setDraft({ ...draft, statement: e.target.value })} /></label>
-            <div className="cols"><label>Disciplina<input value={draft.discipline || ""} onChange={(e) => setDraft({ ...draft, discipline: e.target.value })} /></label><label>Assunto<input value={draft.subject || ""} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></label></div>
+            <div className="cols"><label>Disciplina<input value={draft.discipline || ""} onChange={(e) => setDraft({ ...draft, discipline: e.target.value })} /></label><label>Assunto(s)<input placeholder="Separe por · ou ;" value={draft.subject || ""} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></label></div>
             <div className="cols"><label>Banca<input value={draft.banca || ""} onChange={(e) => setDraft({ ...draft, banca: e.target.value })} /></label><label>Ano<input type="number" value={draft.ano || ""} onChange={(e) => setDraft({ ...draft, ano: e.target.value })} /></label></div><label>Concurso<input value={draft.concurso || ""} onChange={(e) => setDraft({ ...draft, concurso: e.target.value })} /></label>
             {draft.alternatives.map((a) => <label className="alt" key={a.letter}><input type="radio" name={`answer-${draft.id}`} checked={draft.correct_option === a.letter} onChange={() => setDraft({ ...draft, correct_option: a.letter, is_annulled: false })} /><b>{a.letter}</b><input value={a.text} onChange={(e) => changeAlternative(a.letter, e.target.value)} /></label>)}
             <div className="cols"><select value={draft.difficulty_initial || "media"} onChange={(e) => setDraft({ ...draft, difficulty_initial: e.target.value, difficulty_current: e.target.value })}><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select><button onClick={save}>Salvar alterações</button></div>
@@ -698,7 +708,7 @@ function BatchReview({ drafts, setDrafts, questions, busy, analyzeSelected, save
   const [bulkDiscipline, setBulkDiscipline] = React.useState("");
   const [bulkSubject, setBulkSubject] = React.useState("");
   const disciplines = [...new Set(questions.map((q) => q.discipline).filter(Boolean))].sort();
-  const subjects = [...new Set(questions.map((q) => q.subject).filter(Boolean))].sort();
+  const subjects = subjectOptions(questions);
   const selectedCount = drafts.filter((q) => q.selected).length;
   const patch = (id, changes) => setDrafts((ds) => ds.map((q) => q.tempId === id ? { ...q, ...changes } : q));
   const statusOf = (q) => {
@@ -728,7 +738,7 @@ function BatchReview({ drafts, setDrafts, questions, busy, analyzeSelected, save
       <div className="bulk-tools">
         <input list="saved-disciplines" placeholder="Disciplina para selecionadas" value={bulkDiscipline} onChange={(e) => setBulkDiscipline(e.target.value)} />
         <datalist id="saved-disciplines">{disciplines.map((x) => <option value={x} key={x} />)}</datalist>
-        <input list="saved-subjects" placeholder="Assunto para selecionadas" value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} />
+        <input list="saved-subjects" placeholder="Assunto(s) para selecionadas — use · ou ;" value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} />
         <datalist id="saved-subjects">{subjects.map((x) => <option value={x} key={x} />)}</datalist>
         <button className="light" onClick={() => applyBulk(bulkDiscipline, bulkSubject)}>Aplicar às selecionadas</button>
       </div>
@@ -776,14 +786,7 @@ function DraftEditor({ q, patchDraft, questions }) {
   const disciplines = [
       ...new Set(questions.map((x) => x.discipline).filter(Boolean)),
     ].sort(),
-    subjects = [
-      ...new Set(
-        questions
-          .filter((x) => !q.discipline || x.discipline === q.discipline)
-          .map((x) => x.subject)
-          .filter(Boolean),
-      ),
-    ].sort();
+    subjects = subjectOptions(questions, q.discipline);
   return (
     <div className="editor inline-editor">
       <h3>Questão {q.original_number}</h3>
@@ -835,7 +838,7 @@ function DraftEditor({ q, patchDraft, questions }) {
         <div>
           <input
             list={`subjects-${q.tempId}`}
-            placeholder="Assunto"
+            placeholder="Assunto(s) — separe por · ou ;"
             value={q.subject}
             onChange={(e) => setField("subject", e.target.value)}
           />
@@ -879,6 +882,9 @@ function FormattedQuestionText({ text }) {
 function Study({ questions, supabase, userId }) {
   const [discipline, setDiscipline] = React.useState(""),
     [subject, setSubject] = React.useState(""),
+    [board, setBoard] = React.useState(""),
+    [year, setYear] = React.useState(""),
+    [contest, setContest] = React.useState(""),
     [cycle, setCycle] = React.useState([]),
     [remaining, setRemaining] = React.useState([]),
     [status, setStatus] = React.useState([]),
@@ -895,7 +901,10 @@ function Study({ questions, supabase, userId }) {
     (q) =>
       !q.is_annulled && !q.is_hidden && q.correct_option !== "*" &&
       (!discipline || q.discipline === discipline) &&
-      (!subject || q.subject === subject),
+      hasSubject(q, subject) &&
+      (!board || q.banca === board) &&
+      (!year || String(q.ano) === year) &&
+      (!contest || q.concurso === contest),
   );
   const begin = React.useCallback((source, keepRemaining = []) => {
     const picked = shuffle(source).slice(0, 10);
@@ -908,7 +917,7 @@ function Study({ questions, supabase, userId }) {
     setFinished(false);
     setCycleId(null);
     if (picked.length) supabase.from("study_cycles").insert({ user_id: userId, total_questions: picked.length, discipline: discipline || null, subject: subject || null }).select("id").single().then(({ data }) => setCycleId(data?.id || null));
-  }, [supabase, userId, discipline, subject]);
+  }, [supabase, userId, discipline, subject, board, year, contest]);
   React.useEffect(() => {
     if (!questions.length) return;
     // Só na primeira abertura: recupera exatamente o ciclo que estava em andamento.
@@ -919,9 +928,12 @@ function Study({ questions, supabase, userId }) {
         const byId = new Map(questions.map((item) => [item.id, item]));
         const savedCycle = (saved?.questionIds || []).map((id) => byId.get(id)).filter(Boolean);
         if (savedCycle.length === (saved?.questionIds || []).length && savedCycle.length) {
-          skipRestoredFilterChange.current = (saved.discipline || "") !== discipline || (saved.subject || "") !== subject;
+          skipRestoredFilterChange.current = (saved.discipline || "") !== discipline || (saved.subject || "") !== subject || (saved.board || "") !== board || (saved.year || "") !== year || (saved.contest || "") !== contest;
           setDiscipline(saved.discipline || "");
           setSubject(saved.subject || "");
+          setBoard(saved.board || "");
+          setYear(saved.year || "");
+          setContest(saved.contest || "");
           setCycle(savedCycle);
           setRemaining((saved.remainingIds || []).map((id) => byId.get(id)).filter(Boolean));
           setStatus(saved.status?.length === savedCycle.length ? saved.status : savedCycle.map(() => null));
@@ -939,14 +951,14 @@ function Study({ questions, supabase, userId }) {
       return;
     }
     begin(pool, []);
-  }, [questions, discipline, subject]);
+  }, [questions, discipline, subject, board, year, contest]);
   React.useEffect(() => {
     if (!cycle.length) return;
     window.localStorage.setItem(cycleStorageKey, JSON.stringify({
       questionIds: cycle.map((item) => item.id), remainingIds: remaining.map((item) => item.id), status,
-      pos, choice, checked, finished, cycleId, discipline, subject,
+      pos, choice, checked, finished, cycleId, discipline, subject, board, year, contest,
     }));
-  }, [cycle, remaining, status, pos, choice, checked, finished, cycleId, discipline, subject, cycleStorageKey]);
+  }, [cycle, remaining, status, pos, choice, checked, finished, cycleId, discipline, subject, board, year, contest, cycleStorageKey]);
   const q = cycle[pos];
   function markCycleCompleted() { if (cycleId) supabase.from("study_cycles").update({ completed_at: new Date().toISOString() }).eq("id", cycleId); }
   function advance() {
@@ -1029,6 +1041,9 @@ function Study({ questions, supabase, userId }) {
         : "Continue praticando: cada revisão fortalece o aprendizado.";
   const answeredTotal = correctTotal + wrongTotal;
   const completion = cycle.length ? Math.round((answeredTotal / cycle.length) * 100) : 0;
+  const boards = [...new Set(questions.map((item) => item.banca).filter(Boolean))].sort();
+  const years = [...new Set(questions.map((item) => item.ano).filter(Boolean))].sort((a, b) => b - a);
+  const contests = [...new Set(questions.map((item) => item.concurso).filter(Boolean))].sort();
   return (
     <section className="study-dashboard">
       {celebration && <div className="celebration" role="status"><span>★</span><b>Excelente!</b><small>Você acertou uma questão difícil.</small></div>}
@@ -1047,13 +1062,16 @@ function Study({ questions, supabase, userId }) {
           </select>
           <select value={subject} onChange={(e) => setSubject(e.target.value)}>
             <option value="">Todos os assuntos</option>
-            {[...new Set(questions.filter((x) => !discipline || x.discipline === discipline).map((x) => x.subject).filter(Boolean))].map(
+            {subjectOptions(questions, discipline).map(
               (x) => (
                 <option key={x}>{x}</option>
               ),
             )}
           </select>
-          <button className="light clear-filters" onClick={() => { setDiscipline(""); setSubject(""); }}>↻ Limpar filtros</button>
+          <select value={board} onChange={(e) => setBoard(e.target.value)}><option value="">Todas as bancas</option>{boards.map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={year} onChange={(e) => setYear(e.target.value)}><option value="">Todos os anos</option>{years.map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={contest} onChange={(e) => setContest(e.target.value)}><option value="">Todos os concursos</option>{contests.map((item) => <option key={item}>{item}</option>)}</select>
+          <button className="light clear-filters" onClick={() => { setDiscipline(""); setSubject(""); setBoard(""); setYear(""); setContest(""); }}>↻ Limpar filtros</button>
         </div>
         {!cycle.length ? (
           <p>Nenhuma questão encontrada para os filtros selecionados.</p>
@@ -1097,6 +1115,7 @@ function Study({ questions, supabase, userId }) {
                 <span className="study-position">{pos + 1} de {cycle.length}</span>
               </div>
               <div className="study-progress"><span style={{ width: `${((pos + 1) / cycle.length) * 100}%` }} /></div>
+              {(q.banca || q.ano || q.concurso) && <div className="study-origin"><span>Origem da questão</span>{q.banca && <b>{q.banca}</b>}{q.ano && <b>{q.ano}</b>}{q.concurso && <b>{q.concurso}</b>}</div>}
               <FormattedQuestionText text={q.statement} />
               {q.alternatives.map((a) => (
                 <button

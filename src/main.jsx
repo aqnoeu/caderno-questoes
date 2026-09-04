@@ -562,28 +562,22 @@ function Auth() {
     setBusy(false);
   }
   return (
-    <div className="auth card">
-      <h1>Caderno de Questões</h1>
-      <p>Entre ou crie sua conta.</p>
-      <input
-        type="email"
-        placeholder="E-mail"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <input
-        type="password"
-        placeholder="Senha"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <button disabled={busy} onClick={() => act("login")}>
-        Entrar
-      </button>
-      <button className="light" disabled={busy} onClick={() => act("signup")}>
-        Criar conta
-      </button>
-      {msg && <p>{msg}</p>}
+    <div className="auth-page">
+      <section className="auth-intro">
+        <div className="auth-brand"><span className="auth-mark">✓</span><div><b>Caderno de Questões</b><small>Estude. Resolva. Evolua.</small></div></div>
+        <div className="auth-copy"><span className="eyebrow">SEU ESPAÇO DE ESTUDOS</span><h1>Transforme cada questão em <em>evolução.</em></h1><p>Organize seus estudos, pratique com propósito e acompanhe seu progresso rumo à aprovação.</p></div>
+        <div className="auth-features"><span>✓ Ciclos personalizados</span><span>✓ Desempenho real</span><span>✓ Questão por questão</span></div>
+        <div className="auth-orb"><span>✦</span><i></i><b></b></div>
+      </section>
+      <section className="auth-card">
+        <span className="eyebrow">BEM-VINDO</span><h2>Entre na sua conta</h2><p>Continue construindo a sua aprovação.</p>
+        <label>E-mail<input type="email" placeholder="voce@email.com" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+        <label>Senha<input type="password" placeholder="Sua senha" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+        <button className="auth-submit" disabled={busy} onClick={() => act("login")}>{busy ? "Entrando…" : "Entrar no Caderno →"}</button>
+        <div className="auth-signup"><span>Ainda não tem uma conta?</span><button className="link-button" disabled={busy} onClick={() => act("signup")}>Criar conta grátis</button></div>
+        {msg && <p className="auth-message">{msg}</p>}
+      </section>
+      <footer className="auth-credit">Desenvolvido por <span>@aqnoeu</span></footer>
     </div>
   );
 }
@@ -741,14 +735,14 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion, supa
 }
 
 function cleanEssayText(value) {
-  return String(value || "").replace(/\r/g, "").replace(/^\s*\d+\s*$/gm, "").replace(/^.*(?:ORDEM DOS ADVOGADOS|EXAME DE ORDEM UNIFICADO|FGV CONHECIMENTO|P[ÁA]GINA\s*\d+|CADERNO DE PROVA).*(?:\n|$)/gim, "").replace(/\n{3,}/g, "\n\n").trim();
+  return String(value || "").replace(/\r/g, "").replace(/\bQ\s+UEST[ÃA]O\b/gi, "QUESTÃO").replace(/^\s*\d+\s*$/gm, "").replace(/^.*(?:ORDEM DOS ADVOGADOS|EXAME DE ORDEM UNIFICADO|FGV CONHECIMENTO|P[ÁA]GINA\s*\d+|CADERNO DE PROVA).*(?:\n|$)/gim, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 function sectionBlocks(text, expression) {
   const matches = [...text.matchAll(expression)];
   return matches.map((match, index) => ({ number: Number(match[1]), text: text.slice(match.index, matches[index + 1]?.index || text.length).trim() }));
 }
 function parseEssayProof(raw) {
-  const text = cleanEssayText(raw).split(/PE[ÇC]A\s+PR[ÁA]TICO[- ]PROFISSIONAL/i).slice(1).join("\n").replace(/^\s*QUEST[ÃA]O\s+[1-4]\s+[–-]\s*P[ÁA]GINA\s+\d+\s*$/gim, "");
+  const text = cleanEssayText(raw).replace(/^\s*QUEST[ÃA]O\s+[1-4]\s+[–-]\s*P[ÁA]GINA\s+\d+\s*$/gim, "");
   // O pdf.js não preserva sempre as quebras de linha do PDF; por isso o título
   // é localizado em qualquer posição, mas os cabeçalhos "QUESTÃO X – PÁGINA Y" ficam fora.
   return sectionBlocks(text, /QUEST[ÃA]O\s+([1-4])\b(?!\s*[–-]\s*P[ÁA]GINA)/gi).map((item) => ({ ...item, text: item.text.replace(/^\s*QUEST[ÃA]O\s+\d+\s*/i, "").trim() }));
@@ -769,9 +763,9 @@ async function extractPdfText(file) {
 const emptyEssay = () => ({ statement: "", question_number: "", discipline: "", subjects: "", difficulty: "media", banca: "", ano: "", concurso: "", application_date: "", total_points: "0", answer_key_text: "", official_commentary: "", rubrics: [], selected: true });
 
 function EssayAdmin({ supabase }) {
-  const [proofText, setProofText] = React.useState(""), [keyText, setKeyText] = React.useState(""), [drafts, setDrafts] = React.useState([]), [notice, setNotice] = React.useState(""), [busy, setBusy] = React.useState(false);
+  const [proofText, setProofText] = React.useState(""), [keyText, setKeyText] = React.useState(""), [proofName, setProofName] = React.useState(""), [keyName, setKeyName] = React.useState(""), [drafts, setDrafts] = React.useState([]), [notice, setNotice] = React.useState(""), [busy, setBusy] = React.useState(false);
   const patch = (index, changes) => setDrafts((list) => list.map((item, i) => i === index ? { ...item, ...changes } : item));
-  async function readFile(file, kind) { try { const text = await extractPdfText(file); kind === "proof" ? setProofText(text) : setKeyText(text); setNotice("PDF lido. Clique em Separar discursivas quando os dois arquivos estiverem selecionados."); } catch (error) { setNotice(error.message); } }
+  async function readFile(file, kind) { try { setNotice(`Lendo ${file.name}…`); const text = await extractPdfText(file); if (kind === "proof") { setProofText(text); setProofName(file.name); } else { setKeyText(text); setKeyName(file.name); } setNotice("PDF lido com sucesso. Clique em Separar discursivas quando os dois arquivos estiverem selecionados."); } catch (error) { setNotice(error.message); } }
   function separate() {
     const proof = parseEssayProof(proofText), keys = new Map(parseEssayKey(keyText).map((item) => [item.number, item.text]));
     if (!proof.length) return setNotice("Não encontrei QUESTÃO 1 a QUESTÃO 4 no caderno. Verifique se o PDF tem texto selecionável.");
@@ -809,7 +803,7 @@ function EssayAdmin({ supabase }) {
       setDrafts([]); setNotice("Discursivas salvas. Elas já estão na área Discursivas cadastradas.");
     } catch (error) { setNotice(error.message || "Erro ao salvar."); } finally { setBusy(false); }
   }
-  return <section className="essay-admin"><div className="library-heading"><div><span className="eyebrow">CADASTRO DE DISCURSIVAS</span><h2>Importar prova e espelho</h2><p>Somente questões curtas. A peça prático-profissional é ignorada nesta etapa.</p></div></div><div className="card essay-import"><label className="drop">1. Selecionar caderno de prova<input hidden type="file" accept="application/pdf" onChange={(e) => e.target.files[0] && readFile(e.target.files[0], "proof")} /></label><label className="drop">2. Selecionar padrão de resposta<input hidden type="file" accept="application/pdf" onChange={(e) => e.target.files[0] && readFile(e.target.files[0], "key")} /></label><div className="study-actions"><button className="light" disabled={!proofText || !keyText || busy} onClick={separate}>Separar discursivas</button><button disabled={!drafts.length || busy} onClick={classify}>{busy ? "Classificando…" : "Classificar discursivas com IA"}</button><button className="light" disabled={!drafts.length || busy} onClick={save}>Salvar selecionadas</button></div>{notice && <p className="form-message">{notice}</p>}</div>{drafts.length > 0 && <div className="essay-import-list">{drafts.map((item, index) => <article className="card essay-import-card" key={index}><div className="card-top"><label className="card-check"><input type="checkbox" checked={item.selected} onChange={(e) => patch(index, { selected: e.target.checked })} /> Salvar</label><b>Questão {item.question_number}</b><span className={`difficulty ${item.difficulty}`}>{item.difficulty}</span></div><div className="cols"><label>Concurso<input value={item.concurso} onChange={(e) => patch(index, { concurso: e.target.value })} /></label><label>Banca<input value={item.banca} onChange={(e) => patch(index, { banca: e.target.value })} /></label><label>Ano<input value={item.ano} onChange={(e) => patch(index, { ano: e.target.value })} /></label></div><div className="cols"><label>Disciplina<input value={item.discipline} onChange={(e) => patch(index, { discipline: e.target.value })} /></label><label>Assunto(s)<input placeholder="Use · ou ;" value={item.subjects} onChange={(e) => patch(index, { subjects: e.target.value })} /></label><label>Dificuldade<select value={item.difficulty} onChange={(e) => patch(index, { difficulty: e.target.value })}><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select></label></div><label>Enunciado<textarea rows="7" value={item.statement} onChange={(e) => patch(index, { statement: e.target.value })} /></label><label>Espelho oficial<textarea rows="7" value={item.answer_key_text} onChange={(e) => patch(index, { answer_key_text: e.target.value })} /></label><div className="rubric-summary"><b>Critérios oficiais ({item.rubrics.length}) · valor {item.total_points} ponto(s)</b>{item.rubrics.map((rubric, rubricIndex) => <div className="rubric-row" key={rubricIndex}><input placeholder="Item / seção" value={rubric.section || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], section: e.target.value }; patch(index, { rubrics }); }} /><input placeholder="Critério" value={rubric.criterion || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], criterion: e.target.value }; patch(index, { rubrics }); }} /><input type="number" step="0.05" placeholder="Pontos" value={rubric.max_points || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], max_points: e.target.value }; patch(index, { rubrics }); }} /></div>)}</div></article>)}</div>}</section>;
+  return <section className="essay-admin"><div className="library-heading"><div><span className="eyebrow">CADASTRO DE DISCURSIVAS</span><h2>Importar prova e espelho</h2><p>Somente questões curtas. A peça prático-profissional é ignorada nesta etapa.</p></div></div><div className="card essay-import"><label className={`drop ${proofName ? "file-ready" : ""}`}>1. {proofName ? `✓ Prova carregada: ${proofName}` : "Selecionar caderno de prova"}<input hidden type="file" accept="application/pdf" onChange={(e) => e.target.files[0] && readFile(e.target.files[0], "proof")} /></label><label className={`drop ${keyName ? "file-ready" : ""}`}>2. {keyName ? `✓ Espelho carregado: ${keyName}` : "Selecionar padrão de resposta"}<input hidden type="file" accept="application/pdf" onChange={(e) => e.target.files[0] && readFile(e.target.files[0], "key")} /></label><div className="study-actions"><button className="light" disabled={!proofText || !keyText || busy} onClick={separate}>Separar discursivas</button><button disabled={!drafts.length || busy} onClick={classify}>{busy ? "Classificando…" : "Classificar discursivas com IA"}</button><button className="light" disabled={!drafts.length || busy} onClick={save}>Salvar selecionadas</button></div>{notice && <p className="form-message">{notice}</p>}</div>{drafts.length > 0 && <div className="essay-import-list">{drafts.map((item, index) => <article className="card essay-import-card" key={index}><div className="card-top"><label className="card-check"><input type="checkbox" checked={item.selected} onChange={(e) => patch(index, { selected: e.target.checked })} /> Salvar</label><b>Questão {item.question_number}</b><span className={`difficulty ${item.difficulty}`}>{item.difficulty}</span></div><div className="cols"><label>Concurso<input value={item.concurso} onChange={(e) => patch(index, { concurso: e.target.value })} /></label><label>Banca<input value={item.banca} onChange={(e) => patch(index, { banca: e.target.value })} /></label><label>Ano<input value={item.ano} onChange={(e) => patch(index, { ano: e.target.value })} /></label></div><div className="cols"><label>Disciplina<input value={item.discipline} onChange={(e) => patch(index, { discipline: e.target.value })} /></label><label>Assunto(s)<input placeholder="Use · ou ;" value={item.subjects} onChange={(e) => patch(index, { subjects: e.target.value })} /></label><label>Dificuldade<select value={item.difficulty} onChange={(e) => patch(index, { difficulty: e.target.value })}><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select></label></div><label>Enunciado<textarea rows="7" value={item.statement} onChange={(e) => patch(index, { statement: e.target.value })} /></label><label>Espelho oficial<textarea rows="7" value={item.answer_key_text} onChange={(e) => patch(index, { answer_key_text: e.target.value })} /></label><div className="rubric-summary"><b>Critérios oficiais ({item.rubrics.length}) · valor {item.total_points} ponto(s)</b>{item.rubrics.map((rubric, rubricIndex) => <div className="rubric-row" key={rubricIndex}><input placeholder="Item / seção" value={rubric.section || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], section: e.target.value }; patch(index, { rubrics }); }} /><input placeholder="Critério" value={rubric.criterion || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], criterion: e.target.value }; patch(index, { rubrics }); }} /><input type="number" step="0.05" placeholder="Pontos" value={rubric.max_points || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], max_points: e.target.value }; patch(index, { rubrics }); }} /></div>)}</div></article>)}</div>}</section>;
 }
 
 function EssayLibrary({ supabase }) {

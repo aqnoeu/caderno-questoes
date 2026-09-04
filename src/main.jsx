@@ -749,7 +749,9 @@ function sectionBlocks(text, expression) {
 }
 function parseEssayProof(raw) {
   const text = cleanEssayText(raw).split(/PE[ÇC]A\s+PR[ÁA]TICO[- ]PROFISSIONAL/i).slice(1).join("\n").replace(/^\s*QUEST[ÃA]O\s+[1-4]\s+[–-]\s*P[ÁA]GINA\s+\d+\s*$/gim, "");
-  return sectionBlocks(text, /(?:^|\n)\s*QUEST[ÃA]O\s+([1-4])\s*(?=\n|$)/gi).map((item) => ({ ...item, text: item.text.replace(/^\s*QUEST[ÃA]O\s+\d+\s*/i, "").trim() }));
+  // O pdf.js não preserva sempre as quebras de linha do PDF; por isso o título
+  // é localizado em qualquer posição, mas os cabeçalhos "QUESTÃO X – PÁGINA Y" ficam fora.
+  return sectionBlocks(text, /QUEST[ÃA]O\s+([1-4])\b(?!\s*[–-]\s*P[ÁA]GINA)/gi).map((item) => ({ ...item, text: item.text.replace(/^\s*QUEST[ÃA]O\s+\d+\s*/i, "").trim() }));
 }
 function parseEssayKey(raw) {
   const text = cleanEssayText(raw);

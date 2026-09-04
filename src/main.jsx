@@ -462,6 +462,11 @@ function App() {
     } : q));
     setNotice("Disciplina/assunto aplicados às questões selecionadas.");
   }
+  function applyBulkOrigin(concurso, banca, ano) {
+    if (!concurso && !banca && !ano) return setNotice("Informe concurso, banca ou ano.");
+    setDrafts((ds) => ds.map((q) => q.selected ? { ...q, concurso: concurso || q.concurso, banca: banca || q.banca, ano: ano || q.ano } : q));
+    setNotice("Concurso, banca e ano aplicados às questões selecionadas.");
+  }
   async function remove(id, skipConfirm = false) {
     if (!skipConfirm && !confirm("Excluir esta questão?")) return false;
     const { error } = await supabase.from("questions").delete().eq("id", id);
@@ -509,7 +514,7 @@ function App() {
         <button disabled={busy} onClick={process}>Separar questões</button>
         <div className="answer-key"><h3>Aplicar gabarito</h3><p>Cole o gabarito após separar as questões. Use * ou X para anuladas.</p><textarea rows="4" value={answerKey} onChange={(e) => setAnswerKey(e.target.value)} placeholder="1 D 2 B 3 E 4 * 5 A" /><button type="button" onClick={applyAnswerKey}>Preencher respostas corretas</button></div>
       </div>
-      {drafts.length > 0 && <BatchReview drafts={drafts} setDrafts={setDrafts} questions={questions} busy={busy} analyzeSelected={analyzeSelected} saveBatch={saveBatch} deleteSelected={deleteSelected} applyBulk={applyBulk} />}
+      {drafts.length > 0 && <BatchReview drafts={drafts} setDrafts={setDrafts} questions={questions} busy={busy} analyzeSelected={analyzeSelected} saveBatch={saveBatch} deleteSelected={deleteSelected} applyBulk={applyBulk} applyBulkOrigin={applyBulkOrigin} />}
     </section>
   );
   return (
@@ -676,7 +681,7 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion, supa
       (!disciplineFilter || q.discipline === disciplineFilter) &&
       hasSubject(q, subjectFilter) &&
       (!difficultyFilter || (q.difficulty_current || q.difficulty_initial || "media") === difficultyFilter) &&
-      (!boardFilter || q.banca === boardFilter) && (!yearFilter || String(q.ano) === yearFilter) && (!contestFilter || q.concurso === contestFilter) &&
+      (!boardFilter || q.banca === boardFilter) && (!yearFilter || String(q.ano) === yearFilter) && (!contestFilter || (contestFilter === "__missing__" ? !q.concurso : q.concurso === contestFilter)) &&
       (visibilityFilter === "all" || (visibilityFilter === "visible" ? !q.is_hidden : q.is_hidden));
   });
   const startEdit = (q) => {
@@ -711,7 +716,7 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion, supa
         <select value={visibilityFilter} onChange={(e) => setVisibilityFilter(e.target.value)}><option value="all">Visíveis e ocultas</option><option value="visible">Somente visíveis</option><option value="hidden">Somente ocultas</option></select>
         <button className="light compact more-filters" onClick={() => setShowMoreFilters((value) => !value)}>{showMoreFilters ? "Menos filtros" : "Mais filtros"}</button>
       </div>
-      {showMoreFilters && <div className="library-filters more-filter-row"><select value={boardFilter} onChange={(e) => setBoardFilter(e.target.value)}><option value="">Todas as bancas</option>{boards.map((x) => <option key={x}>{x}</option>)}</select><select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}><option value="">Todos os anos</option>{years.map((x) => <option key={x}>{x}</option>)}</select><select value={contestFilter} onChange={(e) => setContestFilter(e.target.value)}><option value="">Todos os concursos</option>{contests.map((x) => <option key={x}>{x}</option>)}</select></div>}
+      {showMoreFilters && <div className="library-filters more-filter-row"><select value={boardFilter} onChange={(e) => setBoardFilter(e.target.value)}><option value="">Todas as bancas</option>{boards.map((x) => <option key={x}>{x}</option>)}</select><select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}><option value="">Todos os anos</option>{years.map((x) => <option key={x}>{x}</option>)}</select><select value={contestFilter} onChange={(e) => setContestFilter(e.target.value)}><option value="">Todos os concursos</option><option value="__missing__">Sem concurso vinculado</option>{contests.map((x) => <option key={x}>{x}</option>)}</select></div>}
       <div className="bulk-question-actions"><label><input type="checkbox" checked={filteredQuestions.length > 0 && selectedIds.length === filteredQuestions.length} ref={(el) => { if (el) el.indeterminate = selectedIds.length > 0 && selectedIds.length < filteredQuestions.length; }} onChange={(e) => selectAll(e.target.checked)} /> Selecionar todas ({selectedIds.length})</label><input placeholder="Concurso" value={bulk.concurso} onChange={(e) => setBulk({ ...bulk, concurso: e.target.value })} /><input placeholder="Banca" value={bulk.banca} onChange={(e) => setBulk({ ...bulk, banca: e.target.value })} /><input type="number" placeholder="Ano" value={bulk.ano} onChange={(e) => setBulk({ ...bulk, ano: e.target.value })} /><button disabled={busy || !selectedIds.length} onClick={applyBulkEdit}>Editar selecionadas</button><button className="danger" disabled={busy || !selectedIds.length} onClick={deleteSelected}>Excluir selecionadas</button></div>
       {contests.length > 0 && <details className="tag-editor"><summary>Personalizar tag de concurso</summary><div><select value={tagDraft.contest} onChange={(e) => { const contest = e.target.value; const tag = tags[contest]; setTagDraft({ contest, label: tag?.label || contest, color: tag?.color || "#eaf2ff", text_color: tag?.text_color || "#1458c6" }); }}><option value="">Selecione o concurso</option>{contests.map((contest) => <option key={contest}>{contest}</option>)}</select><input placeholder="Nome exibido na tag" value={tagDraft.label} onChange={(e) => setTagDraft({ ...tagDraft, label: e.target.value })} /><label>Fundo <input type="color" value={tagDraft.color} onChange={(e) => setTagDraft({ ...tagDraft, color: e.target.value })} /></label><label>Texto <input type="color" value={tagDraft.text_color} onChange={(e) => setTagDraft({ ...tagDraft, text_color: e.target.value })} /></label><button onClick={saveTag}>Salvar tag</button></div></details>}
       {!questions.length ? <div className="card"><p>Nenhuma questão cadastrada.</p></div> : !filteredQuestions.length ? <div className="card"><p>Nenhuma questão encontrada com esses filtros.</p></div> : <div className="question-grid">
@@ -757,9 +762,12 @@ function EssayStudy({ supabase, userId }) {
   if (!selected) return <section className="essay-study"><span className="eyebrow">DISCURSIVAS</span><h1>Pratique suas respostas</h1><p>Selecione uma questão. A peça prático-profissional será disponibilizada em área própria futuramente.</p><div className="essay-card-grid">{questions.map((question) => <article className="question-card" key={question.id}><div className="card-top"><span>Questão {question.question_number || "—"}</span><span className={`difficulty ${question.difficulty}`}>{question.difficulty}</span></div><h3>{question.discipline}</h3><p className="question-subject">{question.subjects}</p><p className="question-preview">{question.statement}</p><div className="card-meta"><span>{question.concurso} · {question.banca} · {question.ano}</span><span>Valor: {question.total_points} ponto(s)</span></div><button onClick={() => openQuestion(question)}>Responder</button></article>)}</div>{!questions.length && <div className="card"><p>Nenhuma discursiva disponível no momento.</p></div>}</section>;
   return <section className="essay-answer"><button className="light" onClick={() => setSelected(null)}>← Voltar às discursivas</button><div className="card"><span className="contest-tag">{selected.concurso} · {selected.banca} · {selected.ano}</span><h1>Questão {selected.question_number || "discursiva"}</h1><p>{selected.discipline} · {selected.subjects} · {selected.total_points} ponto(s)</p><FormattedQuestionText text={selected.statement} /><label className="essay-editor">Sua resposta<textarea rows="14" value={text} onChange={(e) => setText(e.target.value)} placeholder="Digite sua resposta aqui…" /></label><small>{text.trim() ? text.trim().split(/\s+/).length : 0} palavras</small><div className="study-actions"><button className="light" onClick={() => { if (window.confirm("Limpar sua resposta?") ) setText(""); }}>Limpar</button><button className="light" onClick={saveDraft}>Salvar rascunho</button><button disabled={busy} onClick={correct}>{busy ? "Corrigindo…" : "Corrigir resposta"}</button></div>{message && <p className="form-message">{message}</p>}</div>{result && <div className="card essay-result"><span className="eyebrow">RESULTADO</span><h2>{result.score} de {result.max_score} pontos · {result.percentage}%</h2><p>{result.summary}</p><div className="rubric-feedback">{(result.criteria || []).map((criterion) => <article className={criterion.status} key={criterion.rubric_item_id}><b>{criterion.status === "hit" ? "✓ Acertou" : criterion.status === "partial" ? "◐ Parcial" : "× Não atendido"}</b><span>{criterion.achieved_points} / {criterion.max_points} ponto(s)</span><p>{criterion.feedback}</p>{criterion.evidence_excerpt && <small>Trecho identificado: “{criterion.evidence_excerpt}”</small>}</article>)}</div><p className="ai-disclaimer">{result.disclaimer}</p></div>}</section>;
 }
-function BatchReview({ drafts, setDrafts, questions, busy, analyzeSelected, saveBatch, deleteSelected, applyBulk }) {
+function BatchReview({ drafts, setDrafts, questions, busy, analyzeSelected, saveBatch, deleteSelected, applyBulk, applyBulkOrigin }) {
   const [bulkDiscipline, setBulkDiscipline] = React.useState("");
   const [bulkSubject, setBulkSubject] = React.useState("");
+  const [bulkContest, setBulkContest] = React.useState("");
+  const [bulkBoard, setBulkBoard] = React.useState("");
+  const [bulkYear, setBulkYear] = React.useState("");
   const disciplines = [...new Set(questions.map((q) => q.discipline).filter(Boolean))].sort();
   const subjects = subjectOptions(questions);
   const selectedCount = drafts.filter((q) => q.selected).length;
@@ -794,6 +802,12 @@ function BatchReview({ drafts, setDrafts, questions, busy, analyzeSelected, save
         <input list="saved-subjects" placeholder="Assunto(s) para selecionadas — use · ou ;" value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} />
         <datalist id="saved-subjects">{subjects.map((x) => <option value={x} key={x} />)}</datalist>
         <button className="light" onClick={() => applyBulk(bulkDiscipline, bulkSubject)}>Aplicar às selecionadas</button>
+      </div>
+      <div className="bulk-tools bulk-origin-tools">
+        <input placeholder="Concurso para selecionadas" value={bulkContest} onChange={(e) => setBulkContest(e.target.value)} />
+        <input placeholder="Banca para selecionadas" value={bulkBoard} onChange={(e) => setBulkBoard(e.target.value)} />
+        <input type="number" placeholder="Ano para selecionadas" value={bulkYear} onChange={(e) => setBulkYear(e.target.value)} />
+        <button className="light" onClick={() => applyBulkOrigin(bulkContest, bulkBoard, bulkYear)}>Aplicar origem às selecionadas</button>
       </div>
       <div className="batch-actions">
         <button disabled={busy || !selectedCount} onClick={analyzeSelected}>{busy ? "Analisando…" : "Analisar selecionadas com IA"}</button>

@@ -462,11 +462,11 @@ function App() {
     } : q));
     setNotice("Disciplina/assunto aplicados às questões selecionadas.");
   }
-  async function remove(id) {
-    if (!confirm("Excluir esta questão?")) return;
+  async function remove(id, skipConfirm = false) {
+    if (!skipConfirm && !confirm("Excluir esta questão?")) return false;
     const { error } = await supabase.from("questions").delete().eq("id", id);
-    if (error) setNotice(error.message);
-    else load();
+    if (error) { setNotice(error.message); return false; }
+    load(); return true;
   }
   async function toggleHidden(q) {
     const { error } = await supabase.from("questions").update({ is_hidden: !q.is_hidden }).eq("id", q.id);
@@ -516,7 +516,7 @@ function App() {
     <main className="app-shell">
       <header className="app-header">
         <button className="brand" onClick={() => openUser("inicio")}><span className="brand-mark">✓</span><span><b>Caderno de Questões</b><small>Estude. Resolva. Evolua.</small></span></button>
-        <details className="profile-menu"><summary><span className="avatar">{(profile?.display_name || profile?.email || session.user.email || "U")[0].toUpperCase()}</span><span className="profile-name">{profile?.display_name || (profile?.email || session.user.email || "").split("@")[0]}</span><span>⌄</span></summary><div><button onClick={() => openUser("perfil")}>Minha conta</button><button onClick={() => openUser("perfil")}>Preferências</button>{isAdmin && <button onClick={() => openAdmin()}>Painel administrativo</button>}<button onClick={() => supabase.auth.signOut()}>Sair</button></div></details>
+        <details className="profile-menu" onMouseLeave={(event) => event.currentTarget.removeAttribute("open")}><summary><span className="avatar">{(profile?.display_name || profile?.email || session.user.email || "U")[0].toUpperCase()}</span><span className="profile-name">{profile?.display_name || (profile?.email || session.user.email || "").split("@")[0]}</span><span>⌄</span></summary><div><button onClick={() => openUser("perfil")}>Minha conta</button><button onClick={() => openUser("perfil")}>Preferências</button>{isAdmin && <button onClick={() => openAdmin()}>Painel administrativo</button>}<button onClick={() => supabase.auth.signOut()}>Sair</button></div></details>
         {area === "user" && <nav className="user-nav">{[["inicio", "⌂", "Início"], ["estudos", "▤", "Estudos"], ["desempenho", "▥", "Desempenho"], ["perfil", "⚙", "Perfil"]].map(([id, icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><span aria-hidden="true">{icon}</span>{label}</button>)}</nav>}
       </header>
       {notice && (
@@ -530,7 +530,7 @@ function App() {
         <div hidden={tab !== "estudos"}><Study questions={questions} supabase={supabase} userId={session.user.id} /></div>
         {tab === "desempenho" && <Performance questions={questions} userId={session.user.id} supabase={supabase} goStudy={() => setTab("estudos")} />}
         {tab === "perfil" && <UserProfile profile={profile} session={session} supabase={supabase} onProfileSaved={(values) => setProfile((current) => ({ ...current, ...values }))} />}
-      </> : isAdmin ? <section className="admin-layout"><aside className="admin-sidebar"><button className="admin-back" onClick={() => openUser("inicio")}>← Área do aluno</button><h2>Painel administrativo</h2><small>Gestão do acervo</small>{[["overview", "Visão geral"], ["cadastro", "Cadastro"], ["questoes", "Questões"]].map(([id, label]) => <button key={id} className={adminTab === id ? "active" : ""} onClick={() => setAdminTab(id)}>{label}</button>)}</aside><div className="admin-content">{adminTab === "overview" && <AdminOverview questions={questions} supabase={supabase} />}{adminTab === "cadastro" && cadastroContent}{adminTab === "questoes" && <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} />}</div></section> : <section className="card"><h2>Acesso restrito</h2><p>Esta área é exclusiva para administradores.</p><button onClick={() => openUser("inicio")}>Voltar ao início</button></section>}
+      </> : isAdmin ? <section className="admin-layout"><aside className="admin-sidebar"><button className="admin-back" onClick={() => openUser("inicio")}>← Área do aluno</button><h2>Painel administrativo</h2><small>Gestão do acervo</small>{[["overview", "Visão geral"], ["cadastro", "Cadastro"], ["questoes", "Questões"]].map(([id, label]) => <button key={id} className={adminTab === id ? "active" : ""} onClick={() => setAdminTab(id)}>{label}</button>)}</aside><div className="admin-content">{adminTab === "overview" && <AdminOverview questions={questions} supabase={supabase} />}{adminTab === "cadastro" && cadastroContent}{adminTab === "questoes" && <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} supabase={supabase} />}</div></section> : <section className="card"><h2>Acesso restrito</h2><p>Esta área é exclusiva para administradores.</p><button onClick={() => openUser("inicio")}>Voltar ao início</button></section>}
     </main>
   );
 }
@@ -596,6 +596,11 @@ function useCompletedCycles(supabase, userId) {
   React.useEffect(() => { let alive = true; supabase.from("study_cycles").select("id", { count: "exact", head: true }).eq("user_id", userId).not("completed_at", "is", null).then(({ count: total }) => { if (alive) setCount(total || 0); }); return () => { alive = false; }; }, [supabase, userId]);
   return count;
 }
+function useActiveCycle(supabase, userId) {
+  const [cycle, setCycle] = React.useState(null);
+  React.useEffect(() => { let alive = true; supabase.from("study_cycles").select("id,answer_count,total_questions").eq("user_id", userId).is("completed_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle().then(({ data }) => { if (alive) setCycle(data || null); }); return () => { alive = false; }; }, [supabase, userId]);
+  return cycle;
+}
 function greetingName() {
   const hour = new Date().getHours();
   return hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
@@ -617,13 +622,14 @@ function answerMetrics(answers, questions) {
 function UserHome({ questions, userId, name: profileName, email, supabase, goStudy }) {
   const answers = useAnswerHistory(supabase, userId);
   const completedCycles = useCompletedCycles(supabase, userId);
+  const activeCycle = useActiveCycle(supabase, userId);
   const metrics = answerMetrics(answers, questions);
   const name = profileName?.trim() || (String(email || "estudante").split("@")[0].split(/[._-]/)[0] || "estudante");
   const last = answers.at(-1)?.answered_at ? new Date(answers.at(-1).answered_at).toLocaleDateString("pt-BR") : "Ainda não houve atividade";
   return <section className="user-home">
     <div className="home-hero"><div><span className="eyebrow">SEU ESPAÇO DE ESTUDOS</span><h1>{greetingName()}, {name} <span aria-hidden="true">👋</span></h1><p>Vamos continuar de onde você parou?</p></div><button onClick={goStudy}>Continuar estudos <span>→</span></button><div className="hero-icon">⌁</div></div>
     <div className="metric-grid"><MetricCard label="Questões respondidas" value={metrics.total} icon="◉" /><MetricCard label="Taxa de acertos" value={`${metrics.rate}%`} icon="✓" /><MetricCard label="Ciclos concluídos" value={completedCycles} icon="◌" /><MetricCard label="Sequência de estudos" value={`${metrics.streak} dia${metrics.streak === 1 ? "" : "s"}`} icon="↗" /></div>
-    <div className="home-grid"><section className="card continue-card"><span className="eyebrow">CONTINUAR ESTUDANDO</span><h2>{metrics.total ? "Seu próximo ciclo está pronto" : "Inicie seu primeiro ciclo"}</h2><div className="continue-info"><span>Última atividade: {last}</span><span>{metrics.total ? `${metrics.recentRate}% de acertos recentes` : "Escolha uma disciplina e comece"}</span></div><button onClick={goStudy}>{metrics.total ? "Continuar ciclo" : "Novo ciclo"}</button></section><section className="card performance-card"><span className="eyebrow">SEU DESEMPENHO</span><h2>Histórico recente</h2><MiniChart answers={metrics.days} /><div className="performance-lines"><span>Melhor disciplina <b>{metrics.best?.name || "—"}</b></span><span>Média recente <b>{metrics.recentRate}%</b></span></div></section></div>
+    <div className="home-grid"><section className="card continue-card"><span className="eyebrow">CONTINUAR ESTUDANDO</span><h2>{activeCycle ? "Continue seu ciclo" : "Inicie um ciclo"}</h2><div className="continue-info"><span>{activeCycle ? `${activeCycle.answer_count || 0} de ${activeCycle.total_questions} questões respondidas` : "Escolha concurso, banca e ano para começar"}</span><span>{activeCycle ? "Seu progresso está salvo na conta" : "Seu primeiro ciclo terá 10 questões"}</span></div><button onClick={goStudy}>{activeCycle ? "Continuar ciclo" : "Iniciar ciclo"}</button></section><section className="card performance-card"><span className="eyebrow">SEU DESEMPENHO</span><h2>Histórico recente</h2><MiniChart answers={metrics.days} /><div className="performance-lines"><span>Melhor disciplina <b>{metrics.best?.name || "—"}</b></span><span>Média recente <b>{metrics.recentRate}%</b></span></div></section></div>
     <section className="focus-home"><div><span>◎</span><div><b>FOCO RECOMENDADO</b><p>{metrics.focus ? `${metrics.focus.name}: aproveite para revisar esta disciplina, onde sua taxa está em ${metrics.focus.rate}%.` : "Resolva algumas questões para receber uma recomendação personalizada."}</p></div></div><button className="light" onClick={goStudy}>Revisar agora</button></section>
   </section>;
 }
@@ -640,7 +646,7 @@ function UserProfile({ profile, session, supabase, onProfileSaved }) {
 }
 function AdminOverview({ questions, supabase }) { const [userCount, setUserCount] = React.useState(null); React.useEffect(() => { supabase.from("profiles").select("id", { count: "exact", head: true }).then(({ count }) => setUserCount(count ?? 0)); }, [supabase]); const visible = questions.filter((q) => !q.is_hidden).length; const disciplines = new Set(questions.map((q) => q.discipline).filter(Boolean)).size; const boards = new Set(questions.map((q) => q.banca).filter(Boolean)).size; return <section className="admin-overview"><div><span className="eyebrow">PAINEL ADMINISTRATIVO</span><h1>Visão geral</h1><p>Dados reais do acervo disponível no sistema.</p></div><div className="metric-grid admin-metrics"><MetricCard label="Questões cadastradas" value={questions.length} icon="▤" /><MetricCard label="Questões visíveis" value={visible} icon="◉" /><MetricCard label="Questões ocultas" value={questions.length - visible} icon="◌" /><MetricCard label="Disciplinas" value={disciplines} icon="▥" /><MetricCard label="Bancas" value={boards} icon="◈" /><MetricCard label="Usuários cadastrados" value={userCount == null ? "…" : userCount} icon="◉" /></div></section>; }
 
-function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
+function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion, supabase }) {
   const [editingId, setEditingId] = React.useState(null);
   const [draft, setDraft] = React.useState(null);
   const [search, setSearch] = React.useState("");
@@ -652,11 +658,17 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
   const [boardFilter, setBoardFilter] = React.useState("");
   const [yearFilter, setYearFilter] = React.useState("");
   const [contestFilter, setContestFilter] = React.useState("");
+  const [selectedIds, setSelectedIds] = React.useState([]);
+  const [bulk, setBulk] = React.useState({ concurso: "", banca: "", ano: "" });
+  const [busy, setBusy] = React.useState(false);
+  const [tags, setTags] = React.useState({});
+  const [tagDraft, setTagDraft] = React.useState({ contest: "", label: "", color: "#eaf2ff", text_color: "#1458c6" });
   const disciplines = [...new Set(questions.map((q) => q.discipline).filter(Boolean))].sort();
   const subjects = subjectOptions(questions);
   const boards = [...new Set(questions.map((q) => q.banca).filter(Boolean))].sort();
   const years = [...new Set(questions.map((q) => q.ano).filter(Boolean))].sort((a, b) => b - a);
   const contests = [...new Set(questions.map((q) => q.concurso).filter(Boolean))].sort();
+  React.useEffect(() => { let alive = true; supabase.from("contest_tags").select("*").then(({ data }) => { if (alive && data) setTags(Object.fromEntries(data.map((tag) => [tag.contest, tag]))); }); return () => { alive = false; }; }, [supabase]);
   const filteredQuestions = questions.filter((q) => {
     const searchable = `${q.id} ${q.statement} ${q.discipline || ""} ${q.subject || ""}`.toLowerCase();
     return (!search || searchable.includes(search.toLowerCase())) &&
@@ -670,6 +682,11 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
     setEditingId(q.id);
     setDraft({ ...q, alternatives: (q.alternatives || []).map((a) => ({ ...a })) });
   };
+  const toggleSelected = (id) => setSelectedIds((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]);
+  const selectAll = (checked) => setSelectedIds(checked ? filteredQuestions.map((q) => q.id) : []);
+  async function applyBulkEdit() { if (!selectedIds.length) return; setBusy(true); await Promise.all(selectedIds.map((id) => updateQuestion(id, { concurso: bulk.concurso.trim() || null, banca: bulk.banca.trim() || null, ano: bulk.ano ? Number(bulk.ano) : null }))); setBusy(false); setSelectedIds([]); }
+  async function deleteSelected() { if (!selectedIds.length || !window.confirm(`Excluir ${selectedIds.length} questão(ões)?`)) return; setBusy(true); await Promise.all(selectedIds.map((id) => remove(id, true))); setBusy(false); setSelectedIds([]); }
+  async function saveTag() { if (!tagDraft.contest) return; const row = { contest: tagDraft.contest, label: tagDraft.label.trim() || tagDraft.contest, color: tagDraft.color, text_color: tagDraft.text_color }; const { error } = await supabase.from("contest_tags").upsert(row); if (!error) { setTags((items) => ({ ...items, [row.contest]: row })); setTagDraft({ ...tagDraft, label: row.label }); } }
   const changeAlternative = (letter, text) => setDraft((d) => ({ ...d, alternatives: d.alternatives.map((a) => a.letter === letter ? { ...a, text } : a) }));
   const save = async () => {
     if (!draft.statement.trim() || !draft.discipline?.trim() || !draft.subject?.trim()) return;
@@ -684,6 +701,7 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
   return (
     <section className="questions-library">
       <div className="library-heading"><div><h2>Questões cadastradas</h2><p>{filteredQuestions.length} de {questions.length} questão(ões).</p></div></div>
+      {contests.length > 0 && <div className="contest-tabs"><button className={!contestFilter ? "active" : ""} onClick={() => setContestFilter("")}>Todas <small>{questions.length}</small></button>{contests.map((contest) => { const tag = tags[contest]; return <button key={contest} className={contestFilter === contest ? "active" : ""} style={tag ? { background: tag.color, color: tag.text_color } : undefined} onClick={() => setContestFilter(contest)}>{tag?.label || contest} <small>{questions.filter((q) => q.concurso === contest).length}</small></button>; })}</div>}
       <div className="library-filters">
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por texto ou ID" />
         <select value={disciplineFilter} onChange={(e) => { setDisciplineFilter(e.target.value); setSubjectFilter(""); }}><option value="">Todas as disciplinas</option>{disciplines.map((x) => <option key={x}>{x}</option>)}</select>
@@ -693,13 +711,15 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion }) {
         <button className="light compact more-filters" onClick={() => setShowMoreFilters((value) => !value)}>{showMoreFilters ? "Menos filtros" : "Mais filtros"}</button>
       </div>
       {showMoreFilters && <div className="library-filters more-filter-row"><select value={boardFilter} onChange={(e) => setBoardFilter(e.target.value)}><option value="">Todas as bancas</option>{boards.map((x) => <option key={x}>{x}</option>)}</select><select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}><option value="">Todos os anos</option>{years.map((x) => <option key={x}>{x}</option>)}</select><select value={contestFilter} onChange={(e) => setContestFilter(e.target.value)}><option value="">Todos os concursos</option>{contests.map((x) => <option key={x}>{x}</option>)}</select></div>}
+      <div className="bulk-question-actions"><label><input type="checkbox" checked={filteredQuestions.length > 0 && selectedIds.length === filteredQuestions.length} ref={(el) => { if (el) el.indeterminate = selectedIds.length > 0 && selectedIds.length < filteredQuestions.length; }} onChange={(e) => selectAll(e.target.checked)} /> Selecionar todas ({selectedIds.length})</label><input placeholder="Concurso" value={bulk.concurso} onChange={(e) => setBulk({ ...bulk, concurso: e.target.value })} /><input placeholder="Banca" value={bulk.banca} onChange={(e) => setBulk({ ...bulk, banca: e.target.value })} /><input type="number" placeholder="Ano" value={bulk.ano} onChange={(e) => setBulk({ ...bulk, ano: e.target.value })} /><button disabled={busy || !selectedIds.length} onClick={applyBulkEdit}>Editar selecionadas</button><button className="danger" disabled={busy || !selectedIds.length} onClick={deleteSelected}>Excluir selecionadas</button></div>
+      {contests.length > 0 && <details className="tag-editor"><summary>Personalizar tag de concurso</summary><div><select value={tagDraft.contest} onChange={(e) => { const contest = e.target.value; const tag = tags[contest]; setTagDraft({ contest, label: tag?.label || contest, color: tag?.color || "#eaf2ff", text_color: tag?.text_color || "#1458c6" }); }}><option value="">Selecione o concurso</option>{contests.map((contest) => <option key={contest}>{contest}</option>)}</select><input placeholder="Nome exibido na tag" value={tagDraft.label} onChange={(e) => setTagDraft({ ...tagDraft, label: e.target.value })} /><label>Fundo <input type="color" value={tagDraft.color} onChange={(e) => setTagDraft({ ...tagDraft, color: e.target.value })} /></label><label>Texto <input type="color" value={tagDraft.text_color} onChange={(e) => setTagDraft({ ...tagDraft, text_color: e.target.value })} /></label><button onClick={saveTag}>Salvar tag</button></div></details>}
       {!questions.length ? <div className="card"><p>Nenhuma questão cadastrada.</p></div> : !filteredQuestions.length ? <div className="card"><p>Nenhuma questão encontrada com esses filtros.</p></div> : <div className="question-grid">
         {filteredQuestions.map((q) => <article className={`question-card ${q.is_hidden ? "hidden-card" : ""}`} key={q.id}>
-          <div className="card-top"><span className="question-id">ID {String(q.id).slice(0, 8)}</span><span className={`difficulty ${q.difficulty_current || q.difficulty_initial || "media"}`}>{q.difficulty_current || q.difficulty_initial || "media"}</span></div>
+          <div className="card-top"><label className="card-check"><input type="checkbox" checked={selectedIds.includes(q.id)} onChange={() => toggleSelected(q.id)} /> Selecionar</label><span className="question-id">ID {String(q.id).slice(0, 8)}</span><span className={`difficulty ${q.difficulty_current || q.difficulty_initial || "media"}`}>{q.difficulty_current || q.difficulty_initial || "media"}</span></div>
           <h3>{q.discipline || "Sem disciplina"}</h3>
           <p className="question-subject">{q.subject || "Sem assunto"}</p>
           <p className="question-preview">{q.statement}</p>
-          <div className="card-meta"><span>Gabarito: {q.correct_option === "*" ? "Anulada" : q.correct_option}</span>{(q.banca || q.ano || q.concurso) && <span className="question-origin">{q.banca && `Banca: ${q.banca}`}{q.ano && ` · Ano: ${q.ano}`}{q.concurso && ` · Concurso: ${q.concurso}`}</span>}{q.is_hidden && <span className="hidden-label">Oculta dos estudos</span>}</div>
+          <div className="card-meta"><span>Gabarito: {q.correct_option === "*" ? "Anulada" : q.correct_option}</span>{q.concurso && <span className="contest-tag" style={tags[q.concurso] ? { background: tags[q.concurso].color, color: tags[q.concurso].text_color } : undefined}>{tags[q.concurso]?.label || q.concurso}{q.banca && ` · ${q.banca}`}</span>}{(q.ano || q.banca || q.concurso) && <span className="question-origin">{q.ano && `Ano: ${q.ano}`}</span>}{q.is_hidden && <span className="hidden-label">Oculta dos estudos</span>}</div>
           <div className="card-actions"><button className="light compact" onClick={() => editingId === q.id ? (setEditingId(null), setDraft(null)) : startEdit(q)}>{editingId === q.id ? "Fechar" : "Editar"}</button><button className="light compact" onClick={() => toggleHidden(q)}>{q.is_hidden ? "Exibir" : "Ocultar"}</button><button className="danger compact" onClick={() => remove(q.id)}>Excluir</button></div>
           {editingId === q.id && draft && <div className="saved-editor">
             <label>Enunciado<textarea rows="5" value={draft.statement} onChange={(e) => setDraft({ ...draft, statement: e.target.value })} /></label>

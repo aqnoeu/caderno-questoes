@@ -10,5 +10,6 @@ create table if not exists public.essay_correction_credits (
 );
 create index if not exists essay_correction_credits_user_idx on public.essay_correction_credits(user_id, used_at);
 alter table public.essay_correction_credits enable row level security;
+drop policy if exists "essay_correction_credits_admin" on public.essay_correction_credits;
 create policy "essay_correction_credits_admin" on public.essay_correction_credits
   for all to authenticated using (public.is_admin()) with check (public.is_admin());

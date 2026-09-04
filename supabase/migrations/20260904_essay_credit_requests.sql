@@ -9,7 +9,9 @@ create table if not exists public.essay_correction_requests (
 );
 create index if not exists essay_correction_requests_user_idx on public.essay_correction_requests(user_id, status, created_at desc);
 alter table public.essay_correction_requests enable row level security;
+drop policy if exists "essay_credit_requests_own" on public.essay_correction_requests;
 create policy "essay_credit_requests_own" on public.essay_correction_requests
   for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "essay_credit_requests_admin" on public.essay_correction_requests;
 create policy "essay_credit_requests_admin" on public.essay_correction_requests
   for all to authenticated using (public.is_admin()) with check (public.is_admin());

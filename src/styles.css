@@ -655,6 +655,58 @@ button.annulled {
   .profile-menu > div { top: 45px; min-width: 210px; }
 }
 
+/* Home do aluno: fundo leve, dados e ações em cartões com bastante respiro. */
+.app-shell { position: relative; }
+.app-shell::before, .app-shell::after { content: ""; position: fixed; z-index: -1; border-radius: 50%; pointer-events: none; filter: blur(1px); }
+.app-shell::before { width: 440px; height: 440px; top: -230px; left: -210px; background: #e4efff; opacity: .78; }
+.app-shell::after { width: 520px; height: 520px; right: -290px; bottom: -260px; background: #e9f2ff; opacity: .8; }
+.app-header { min-height: 154px; margin-bottom: 22px; padding-top: 30px; }
+.app-header::before { background: linear-gradient(112deg, #fbfdff 4%, #f6f9ff 55%, #f3f8ff); }
+.app-header::after { display: none; }
+.brand { gap: 12px; }
+.brand b { font-size: 22px; letter-spacing: -.04em; }
+.brand small { margin-top: 3px; font-size: 12px; }
+.brand-mark { width: 46px; height: 46px; border-width: 2px; outline-width: 1px; border-radius: 12px 12px 15px 12px; font-size: 24px; }
+.profile-menu summary { min-height: 51px; padding: 7px 11px; border-radius: 14px; }
+.app-header .user-nav { bottom: 14px; padding: 3px 0; gap: 26px; background: transparent; border: 0; box-shadow: none; border-radius: 0; }
+.user-nav button { padding: 8px 0; border-radius: 0; color: #20365e; font-size: 14px; font-weight: 600; }
+.user-nav button > span { display: none; }
+.user-nav button.active { color: #1463df; background: transparent; box-shadow: none; border-bottom: 2px solid #1463df; }
+
+.user-home { position: relative; gap: 16px; }
+.home-hero { min-height: 124px; padding: 26px 34px; border-radius: 17px; background: #fffffff2; box-shadow: 0 11px 30px #163b7810; }
+.home-hero::after { width: 175px; height: 175px; right: -65px; top: -64px; background: #edf5ff; }
+.home-hero h1 { font-size: 30px; margin-bottom: 5px; }
+.home-hero p { font-size: 16px; }
+.home-hero button { min-width: 208px; padding: 13px 19px; border-radius: 9px; }
+.home-metric-grid { gap: 16px; }
+.metric-card { min-height: 108px; padding: 19px 20px; display: flex; gap: 14px; align-items: center; border-color: #e2e8f2; border-radius: 15px; box-shadow: 0 8px 22px #17203308; }
+.metric-card > span { flex: 0 0 auto; width: 45px; height: 45px; border-radius: 14px; font-size: 23px; }
+.metric-card small { margin: 0; color: #2a3e63; font-size: 13px; font-weight: 700; }
+.metric-card b { margin-top: 6px; font-size: 28px; line-height: 1; }
+.metric-card.good > span { background: #e9faf0; color: #0b9a57; }.metric-card.good b { color: #079353; }
+.metric-card.warm > span { background: #fff0ed; color: #f05d50; }.metric-card.warm b { color: #ef4d42; }
+.home-grid { grid-template-columns: .82fr 1.18fr; gap: 17px; }
+.home-grid .card { min-height: 322px; margin: 0; padding: 27px 30px; border-radius: 16px; }
+.continue-card h2, .performance-card h2 { margin: 0; color: #102957; font-size: 21px; letter-spacing: -.025em; }
+.continue-subject { display: flex; align-items: center; gap: 15px; margin: 27px 0 10px; }.continue-subject > span { display:grid; place-items:center; flex:0 0 auto; width:50px; height:50px; border-radius:14px; background:#eaf2ff; color:#1463df; font-size:28px; }.continue-subject b,.continue-subject small { display:block; }.continue-subject b { color:#152c59; font-size:16px; }.continue-subject small { margin-top:5px; color:#60739a; font-size:12px; }.continue-cycle { margin: 19px 0 9px; color:#344d7a; font-weight:800; font-size:14px; }
+.continue-progress { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:14px; color:#1463df; font-size:14px; }.continue-progress > div { height:8px; overflow:hidden; border-radius:99px; background:#e8edf5; }.continue-progress i { display:block; height:100%; border-radius:inherit; background:#1463df; }.continue-progress span { color:#60749b; }.continue-card > button { margin-top:28px; min-width:177px; }
+.empty-cycle-copy { max-width:390px; margin:26px 0 29px; color:#597097; line-height:1.6; }.continue-card > button { padding:12px 17px; }
+.performance-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; }.performance-heading .link-button { font-size:13px; }
+.performance-summary { display:grid; grid-template-columns:repeat(3,1fr); margin:25px 0 14px; }.performance-summary > span { min-width:0; padding:0 18px; border-left:1px solid #e7edf5; color:#496080; font-size:12px; }.performance-summary > span:first-child { padding-left:0; border-left:0; }.performance-summary b,.performance-summary small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.performance-summary b { margin-top:6px; color:#132b5c; font-size:14px; }.performance-summary small { margin-top:4px; color:#1463df; }.performance-summary .attention small { color:#e74f4c; }
+.cycle-bar-chart { height:135px; display:grid; grid-template-columns:repeat(6,1fr); align-items:end; gap:20px; padding:15px 16px 0; border-bottom:1px solid #dce4f0; background:repeating-linear-gradient(to bottom, transparent 0 33px, #e8eef7 33px 34px); }.cycle-bar { height:100%; display:grid; grid-template-rows:18px 1fr 19px; align-items:end; justify-items:center; min-width:0; }.cycle-bar b { align-self:start; color:#1463df; font-size:12px; }.cycle-bar i { display:block; width:30px; min-height:5px; border-radius:5px 5px 0 0; background:linear-gradient(180deg,#2676ea,#1463df); }.cycle-bar small { padding-top:7px; color:#63738e; font-size:11px; white-space:nowrap; }.chart-empty { display:grid; place-items:center; height:135px; margin-top:21px; color:#667896; font-size:13px; border-top:1px solid #e7edf6; }
+.home-shortcuts { display:grid; grid-template-columns:repeat(3,1fr); gap:17px; }.home-shortcut { display:flex; align-items:center; gap:15px; min-height:105px; padding:18px 20px; color:#172d59; text-align:left; background:#fffffff2; border:1px solid #e1e8f2; border-radius:15px; box-shadow:0 8px 20px #17203308; }.home-shortcut:hover { border-color:#b8d1f9; transform:translateY(-1px); }.home-shortcut > span { display:grid; place-items:center; flex:0 0 auto; width:47px; height:47px; border-radius:14px; background:#eaf2ff; color:#1463df; font-size:29px; font-weight:400; }.home-shortcut > div { min-width:0; flex:1; }.home-shortcut b,.home-shortcut small { display:block; }.home-shortcut b { margin-bottom:5px; font-size:16px; }.home-shortcut small { color:#587097; font-size:12px; line-height:1.35; font-weight:500; }.home-shortcut > i { color:#18386e; font-size:28px; font-style:normal; font-weight:300; }.home-shortcut.review > span { background:#fff0ef; color:#f05750; }.home-shortcut.difficult > span { background:#f4edff; color:#8a4fce; }
+.focus-home { min-height:108px; padding:20px 24px; background:#fffffff0; border-color:#e0e8f2; border-radius:15px; box-shadow:0 8px 20px #17203308; }.focus-home > div > span { display:grid; place-items:center; flex:0 0 auto; width:48px; height:48px; border-radius:14px; background:#e9faf0; color:#0b9a57; font-size:24px; }.focus-home b { color:#112b5a; font-size:16px; }.focus-home p { margin:5px 0; }.focus-home .link-button { font-size:12px; }.focus-home em { padding:8px 11px; border-radius:8px; background:#ebf8ef; color:#087749; font-size:12px; font-style:normal; font-weight:700; }
+
+@media (max-width: 850px) {
+  .app-header { min-height: 176px; }.app-header .user-nav { max-width:100%; overflow-x:auto; gap:18px; }
+  .home-grid { grid-template-columns:1fr; }.home-grid .card { min-height:0; }.home-shortcuts { grid-template-columns:1fr; }.performance-summary { gap:0; }.cycle-bar-chart { gap:10px; }
+}
+@media (max-width: 650px) {
+  .app-header { min-height:154px; }.app-header .user-nav { bottom:10px; gap:16px; max-width:calc(100vw - 22px); }.user-nav button { padding:8px 0; font-size:13px; }
+  .home-hero { padding:22px; }.home-hero h1 { font-size:25px; }.home-hero button { width:100%; }.metric-card { min-height:96px; padding:14px; gap:10px; }.metric-card > span { width:38px; height:38px; border-radius:12px; font-size:19px; }.metric-card small { font-size:11px; }.metric-card b { font-size:22px; }.home-metric-grid { gap:10px; }.home-grid .card { padding:21px; }.performance-summary > span { padding:0 8px; font-size:10px; }.performance-summary b { font-size:12px; }.performance-summary small { white-space:normal; }.cycle-bar-chart { gap:4px; padding-left:5px; padding-right:5px; }.cycle-bar i { width:20px; }.cycle-bar small { font-size:9px; }.focus-home em { align-self:flex-start; }
+}
+
 /* Em notebook estreito e celular, marca, perfil e navegação ocupam linhas próprias. */
 @media (max-width: 900px) {
   .app-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 18px 10px; min-height: 0; padding: 22px 0 18px; margin-bottom: 22px; }

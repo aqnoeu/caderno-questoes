@@ -531,7 +531,7 @@ function App() {
         </div>
       )}
       {area === "user" ? <>
-        {tab === "inicio" && <UserHome questions={questions} userId={session.user.id} name={profile?.display_name} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} />}
+        {tab === "inicio" && <UserHome questions={questions} userId={session.user.id} name={profile?.display_name} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} goPerformance={() => setTab("desempenho")} />}
         <div hidden={tab !== "estudos"}><Study questions={questions} supabase={supabase} userId={session.user.id} /></div>
         {tab === "discursivas" && <EssayStudy supabase={supabase} userId={session.user.id} />}
         {tab === "desempenho" && <Performance questions={questions} userId={session.user.id} supabase={supabase} goStudy={() => setTab("estudos")} />}
@@ -598,8 +598,17 @@ function useCompletedCycles(supabase, userId) {
 }
 function useActiveCycle(supabase, userId) {
   const [cycle, setCycle] = React.useState(null);
-  React.useEffect(() => { let alive = true; supabase.from("study_cycles").select("id,answer_count,total_questions").eq("user_id", userId).is("completed_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle().then(({ data }) => { if (alive) setCycle(data || null); }); return () => { alive = false; }; }, [supabase, userId]);
+  React.useEffect(() => { let alive = true; supabase.from("study_cycles").select("id,answer_count,total_questions,discipline,subject,banca,ano,concurso,started_at").eq("user_id", userId).is("completed_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle().then(({ data }) => { if (alive) setCycle(data || null); }); return () => { alive = false; }; }, [supabase, userId]);
   return cycle;
+}
+function useCycleHistory(supabase, userId) {
+  const [cycles, setCycles] = React.useState([]);
+  React.useEffect(() => {
+    let alive = true;
+    supabase.from("study_cycles").select("id,started_at,completed_at,total_questions,answer_count,correct_count,wrong_count,discipline,subject,banca,ano,concurso").eq("user_id", userId).order("started_at", { ascending: true }).then(({ data }) => { if (alive) setCycles(data || []); });
+    return () => { alive = false; };
+  }, [supabase, userId]);
+  return cycles;
 }
 function greetingName() {
   const hour = new Date().getHours();
@@ -619,21 +628,33 @@ function answerMetrics(answers, questions) {
   const ranked = [...areas.entries()].map(([name, value]) => ({ name, ...value, rate: Math.round((value.correct / value.total) * 100) })).filter((x) => x.total >= 1).sort((a, b) => b.rate - a.rate);
   return { total, correct, rate: total ? Math.round((correct / total) * 100) : 0, recentRate, streak, best: ranked[0], focus: [...ranked].sort((a, b) => a.rate - b.rate)[0], days: answers.slice(-7) };
 }
-function UserHome({ questions, userId, name: profileName, email, supabase, goStudy }) {
+function CycleBarChart({ cycles }) {
+  const data = cycles.slice(-6).map((cycle) => ({ rate: cycle.answer_count ? Math.round((cycle.correct_count / cycle.answer_count) * 100) : 0, label: `Ciclo ${cycle.number}` }));
+  if (!data.length) return <div className="chart-empty">Conclua um ciclo para acompanhar sua evolução.</div>;
+  return <div className="cycle-bar-chart" aria-label="Aproveitamento nos últimos ciclos">{data.map((item) => <div className="cycle-bar" key={item.label}><b>{item.rate}%</b><i style={{ height: `${Math.max(item.rate, 5)}%` }} /><small>{item.label}</small></div>)}</div>;
+}
+function UserHome({ questions, userId, name: profileName, email, supabase, goStudy, goPerformance }) {
   const answers = useAnswerHistory(supabase, userId);
   const completedCycles = useCompletedCycles(supabase, userId);
   const activeCycle = useActiveCycle(supabase, userId);
+  const cycleHistory = useCycleHistory(supabase, userId);
   const metrics = answerMetrics(answers, questions);
   const name = profileName?.trim() || (String(email || "estudante").split("@")[0].split(/[._-]/)[0] || "estudante");
-  const last = answers.at(-1)?.answered_at ? new Date(answers.at(-1).answered_at).toLocaleDateString("pt-BR") : "Ainda não houve atividade";
+  const completedHistory = cycleHistory.filter((cycle) => cycle.completed_at).map((cycle, index) => ({ ...cycle, number: index + 1 }));
+  const latestCycleRate = completedHistory.slice(-5);
+  const recentCycleRate = latestCycleRate.length ? Math.round(latestCycleRate.reduce((sum, cycle) => sum + (cycle.answer_count ? cycle.correct_count / cycle.answer_count * 100 : 0), 0) / latestCycleRate.length) : metrics.recentRate;
+  const activeProgress = activeCycle?.total_questions ? Math.round(((activeCycle.answer_count || 0) / activeCycle.total_questions) * 100) : 0;
+  const activeOrigin = [activeCycle?.concurso, activeCycle?.banca, activeCycle?.ano].filter(Boolean).join(" · ");
+  const focusText = metrics.focus ? `${metrics.focus.name}: sua taxa atual é ${metrics.focus.rate}%.` : "Resolva algumas questões para receber uma recomendação personalizada.";
   return <section className="user-home">
-    <div className="home-hero"><div><span className="eyebrow">SEU ESPAÇO DE ESTUDOS</span><h1>{greetingName()}, {name} <span aria-hidden="true">👋</span></h1><p>Vamos continuar de onde você parou?</p></div><button onClick={goStudy}>Continuar estudos <span>→</span></button><div className="hero-icon">⌁</div></div>
-    <div className="metric-grid"><MetricCard label="Questões respondidas" value={metrics.total} icon="◉" /><MetricCard label="Taxa de acertos" value={`${metrics.rate}%`} icon="✓" /><MetricCard label="Ciclos concluídos" value={completedCycles} icon="◌" /><MetricCard label="Sequência de estudos" value={`${metrics.streak} dia${metrics.streak === 1 ? "" : "s"}`} icon="↗" /></div>
-    <div className="home-grid"><section className="card continue-card"><span className="eyebrow">CONTINUAR ESTUDANDO</span><h2>{activeCycle ? "Continue seu ciclo" : "Inicie um ciclo"}</h2><div className="continue-info"><span>{activeCycle ? `${activeCycle.answer_count || 0} de ${activeCycle.total_questions} questões respondidas` : "Escolha concurso, banca e ano para começar"}</span><span>{activeCycle ? "Seu progresso está salvo na conta" : "Seu primeiro ciclo terá 10 questões"}</span></div><button onClick={goStudy}>{activeCycle ? "Continuar ciclo" : "Iniciar ciclo"}</button></section><section className="card performance-card"><span className="eyebrow">SEU DESEMPENHO</span><h2>Histórico recente</h2><MiniChart answers={metrics.days} /><div className="performance-lines"><span>Melhor disciplina <b>{metrics.best?.name || "—"}</b></span><span>Média recente <b>{metrics.recentRate}%</b></span></div></section></div>
-    <section className="focus-home"><div><span>◎</span><div><b>FOCO RECOMENDADO</b><p>{metrics.focus ? `${metrics.focus.name}: aproveite para revisar esta disciplina, onde sua taxa está em ${metrics.focus.rate}%.` : "Resolva algumas questões para receber uma recomendação personalizada."}</p></div></div><button className="light" onClick={goStudy}>Revisar agora</button></section>
+    <div className="home-hero"><div><h1>{greetingName()}, {name} <span aria-hidden="true">👋</span></h1><p>Vamos continuar de onde você parou?</p></div><button onClick={goStudy}>Continuar estudos <span>→</span></button></div>
+    <div className="metric-grid home-metric-grid"><MetricCard label="Questões respondidas" value={metrics.total} icon="▤" /><MetricCard label="Taxa de acertos" value={`${metrics.rate}%`} icon="✓" tone="good" /><MetricCard label="Ciclos concluídos" value={completedCycles} icon="↻" /><MetricCard label="Sequência de estudos" value={`${metrics.streak} dia${metrics.streak === 1 ? "" : "s"}`} icon="♨" tone="warm" /></div>
+    <div className="home-grid"><section className="card continue-card"><h2>{activeCycle ? "Continuar estudando" : "Inicie um ciclo"}</h2>{activeCycle ? <><div className="continue-subject"><span>▱</span><div><b>{activeCycle.discipline || "Ciclo de estudos"}</b><small>{activeOrigin || "Origem do ciclo"}</small></div></div><p className="continue-cycle">{activeCycle.total_questions} questões · {activeCycle.answer_count || 0} respondida(s)</p><div className="continue-progress"><b>{activeCycle.answer_count || 0} de {activeCycle.total_questions}</b><div><i style={{ width: `${activeProgress}%` }} /></div><span>{activeProgress}%</span></div><button onClick={goStudy}>Continuar ciclo</button></> : <><p className="empty-cycle-copy">Escolha concurso, banca e ano. O ciclo ficará salvo na sua conta e terá 10 questões inéditas.</p><button onClick={goStudy}>Iniciar ciclo</button></>}</section><section className="card performance-card"><div className="performance-heading"><h2>Seu desempenho</h2><button className="link-button" onClick={goPerformance}>Ver detalhes →</button></div><div className="performance-summary"><span>Melhor disciplina <b>{metrics.best?.name || "—"}</b><small>{metrics.best ? `${metrics.best.rate}% de acertos` : "Sem respostas ainda"}</small></span><span className="attention">Atenção <b>{metrics.focus?.name || "—"}</b><small>{metrics.focus ? `${metrics.focus.rate}% de acertos` : "Sem dados ainda"}</small></span><span>Média recente <b>{recentCycleRate}%</b><small>nos últimos ciclos</small></span></div><CycleBarChart cycles={completedHistory} /></section></div>
+    <div className="home-shortcuts"><button className="home-shortcut" onClick={goStudy}><span>＋</span><div><b>Novo ciclo</b><small>Comece um novo ciclo de questões.</small></div><i>›</i></button><button className="home-shortcut review" onClick={goStudy}><span>×</span><div><b>Revisar erros</b><small>Pratique o que você ainda precisa reforçar.</small></div><i>›</i></button><button className="home-shortcut difficult" onClick={goStudy}><span>▥</span><div><b>Questões difíceis</b><small>Desafie-se com questões mais complexas.</small></div><i>›</i></button></div>
+    <section className="focus-home"><div><span>◎</span><div><b>Foco recomendado para você</b><p>{focusText}</p><button className="link-button" onClick={goStudy}>Ver recomendações personalizadas →</button></div></div><em>Prioridade sugerida</em></section>
   </section>;
 }
-function MetricCard({ label, value, icon }) { return <article className="metric-card"><span>{icon}</span><small>{label}</small><b>{value}</b></article>; }
+function MetricCard({ label, value, icon, tone = "" }) { return <article className={`metric-card ${tone}`}><span>{icon}</span><div><small>{label}</small><b>{value}</b></div></article>; }
 function MiniChart({ answers }) { const points = answers.map((a, i) => `${i * 28 + 8},${a.is_correct ? 12 : 52}`).join(" "); return <svg className="mini-chart" viewBox="0 0 190 65" role="img" aria-label="Evolução recente"><path d="M4 57H186" stroke="#e3e9f5" /><polyline points={points || "8,52 180,52"} fill="none" stroke="#1463df" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
 function Performance({ questions, userId, supabase, goStudy }) { const answers = useAnswerHistory(supabase, userId); const metrics = answerMetrics(answers, questions); return <section className="card performance-page"><span className="eyebrow">DESEMPENHO</span><h1>Seu progresso</h1><p>Os dados abaixo são calculados a partir das suas respostas registradas.</p><div className="metric-grid"><MetricCard label="Respondidas" value={metrics.total} icon="◉" /><MetricCard label="Acertos" value={metrics.correct} icon="✓" /><MetricCard label="Taxa geral" value={`${metrics.rate}%`} icon="↗" /><MetricCard label="Média recente" value={`${metrics.recentRate}%`} icon="◌" /></div><h2>Evolução recente</h2><MiniChart answers={metrics.days} /><div className="performance-lines"><span>Melhor disciplina <b>{metrics.best?.name || "—"}</b></span><span>Disciplina que merece atenção <b>{metrics.focus?.name || "—"}</b></span></div><button onClick={goStudy}>Voltar aos estudos</button></section>; }
 function UserProfile({ profile, session, supabase, onProfileSaved }) {

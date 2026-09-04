@@ -683,8 +683,8 @@ button.annulled {
 .metric-card { min-height: 108px; padding: 19px 20px; display: flex; gap: 14px; align-items: center; border-color: #e2e8f2; border-radius: 15px; box-shadow: 0 8px 22px #17203308; }
 .metric-card > span { flex: 0 0 auto; width: 45px; height: 45px; border-radius: 14px; font-size: 23px; }
 .line-icon { display: block; width: 1em; height: 1em; }
-.metric-card > span .line-icon { width: 23px; height: 23px; }
-.continue-subject > span .line-icon, .home-shortcut > span .line-icon, .focus-home > div > span .line-icon { width: 27px; height: 27px; }
+.metric-card > span .line-icon { width: 28px; height: 28px; }
+.continue-subject > span .line-icon, .home-shortcut > span .line-icon, .focus-home > div > span .line-icon { width: 30px; height: 30px; }
 .metric-card small { margin: 0; color: #2a3e63; font-size: 13px; font-weight: 700; }
 .metric-card b { margin-top: 6px; font-size: 28px; line-height: 1; }
 .metric-card.good > span { background: #e9faf0; color: #0b9a57; }.metric-card.good b { color: #079353; }

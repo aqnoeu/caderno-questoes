@@ -629,7 +629,7 @@ function answerMetrics(answers, questions) {
   return { total, correct, rate: total ? Math.round((correct / total) * 100) : 0, recentRate, streak, best: ranked[0], focus: [...ranked].sort((a, b) => a.rate - b.rate)[0], days: answers.slice(-7) };
 }
 function LineIcon({ name, size = 22 }) {
-  const props = { fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round" };
+  const props = { fill: "none", stroke: "currentColor", strokeWidth: 2.05, strokeLinecap: "round", strokeLinejoin: "round" };
   return <svg className="line-icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...props}>
     {name === "document" && <><path d="M7 3.5h7l3.5 3.5v13.5H7z" /><path d="M14 3.5V7h3.5M10 11h4M10 15h4" /></>}
     {name === "check" && <><circle cx="12" cy="12" r="8" /><path d="m8.5 12 2.2 2.2 4.8-5" /></>}
@@ -638,8 +638,8 @@ function LineIcon({ name, size = 22 }) {
     {name === "book" && <><path d="M4.5 5.5A3.5 3.5 0 0 1 8 4h3.5v15H8a3.5 3.5 0 0 0-3.5 1.5zM19.5 5.5A3.5 3.5 0 0 0 16 4h-3.5v15H16a3.5 3.5 0 0 1 3.5 1.5z" /><path d="M12 4v15" /></>}
     {name === "plus" && <><circle cx="12" cy="12" r="8" /><path d="M12 8v8M8 12h8" /></>}
     {name === "x" && <><rect x="5" y="5" width="14" height="14" rx="3" /><path d="m9 9 6 6m0-6-6 6" /></>}
-    {name === "bars" && <><path d="M5 19V11M10 19V7M15 19V4M20 19H4" /></>}
-    {name === "target" && <><circle cx="11" cy="13" r="6.5" /><circle cx="11" cy="13" r="2.2" /><path d="m14.7 9.3 4.8-4.8m-3.7.2h3.5v3.5" /></>}
+    {name === "bars" && <><path d="M4.5 19.5h15" /><path d="M6.5 17v-4.5h3V17M11.5 17V8.5h3V17M16.5 17V5h3V17" /></>}
+    {name === "target" && <><circle cx="10.5" cy="13.5" r="6.7" /><circle cx="10.5" cy="13.5" r="2.2" /><path d="m14.5 9.5 4.8-4.8M16.1 4.7h3.2v3.2" /></>}
     {name === "home" && <><path d="m4.5 10 7.5-6 7.5 6v9.5h-5v-5h-5v5h-5z" /></>}
     {name === "pen" && <><path d="m5 18 1-4 9.6-9.6a2.1 2.1 0 0 1 3 3L9 17l-4 1Z" /><path d="m13.8 6.2 3 3" /></>}
     {name === "settings" && <><circle cx="12" cy="12" r="3" /><path d="M19 13.5v-3l-2-.6a5.6 5.6 0 0 0-.6-1.4l1-1.8-2.1-2.1-1.8 1a5.6 5.6 0 0 0-1.4-.6L11.5 3h-3l-.6 2a5.6 5.6 0 0 0-1.4.6l-1.8-1-2.1 2.1 1 1.8A5.6 5.6 0 0 0 3 9.9l-2 .6v3l2 .6a5.6 5.6 0 0 0 .6 1.4l-1 1.8 2.1 2.1 1.8-1a5.6 5.6 0 0 0 1.4.6l.6 2h3l.6-2a5.6 5.6 0 0 0 1.4-.6l1.8 1 2.1-2.1-1-1.8a5.6 5.6 0 0 0 .6-1.4Z" /></>}

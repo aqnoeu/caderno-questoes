@@ -206,10 +206,24 @@ begin
   if not found then raise exception 'Desafio não encontrado ou já publicado'; end if;
 end; $$;
 
+-- O perfil zera o desempenho real: respostas e ciclos do próprio usuário.
+create or replace function public.reset_my_study_history()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_user_id uuid := auth.uid(); v_answers integer := 0; v_cycles integer := 0;
+begin
+  if v_user_id is null then raise exception 'Autenticação necessária'; end if;
+  delete from public.answers where user_id = v_user_id;
+  get diagnostics v_answers = row_count;
+  delete from public.study_cycles where user_id = v_user_id;
+  get diagnostics v_cycles = row_count;
+  return jsonb_build_object('answers_removed', v_answers, 'cycles_removed', v_cycles);
+end; $$;
+
 revoke all on function public.get_today_daily_challenge() from public;
 revoke all on function public.start_today_daily_challenge() from public;
 revoke all on function public.submit_daily_challenge_answer(uuid,uuid,boolean) from public;
 revoke all on function public.finish_daily_challenge_attempt(uuid) from public;
 revoke all on function public.get_daily_challenge_ranking(uuid) from public;
 revoke all on function public.publish_daily_challenge(uuid) from public;
-grant execute on function public.get_today_daily_challenge(), public.start_today_daily_challenge(), public.submit_daily_challenge_answer(uuid,uuid,boolean), public.finish_daily_challenge_attempt(uuid), public.get_daily_challenge_ranking(uuid), public.publish_daily_challenge(uuid) to authenticated;
+revoke all on function public.reset_my_study_history() from public;
+grant execute on function public.get_today_daily_challenge(), public.start_today_daily_challenge(), public.submit_daily_challenge_answer(uuid,uuid,boolean), public.finish_daily_challenge_attempt(uuid), public.get_daily_challenge_ranking(uuid), public.publish_daily_challenge(uuid), public.reset_my_study_history() to authenticated;

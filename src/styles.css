@@ -739,4 +739,6 @@ button.annulled {
 .profile-menu { width: 224px; }
 .profile-menu summary { width: 100%; }
 .profile-menu > div { width: 224px; }
+/* O painel começa imediatamente após o botão do usuário: sem faixa que fecha o menu no hover. */
+.profile-menu > div { top: calc(100% - 1px); }
 @media (max-width: 900px) { .app-header { gap: 20px 10px; padding: 24px 0 20px; }.app-header .user-nav { width: 100%; } }

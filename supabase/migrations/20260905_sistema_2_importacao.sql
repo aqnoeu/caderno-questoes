@@ -24,6 +24,7 @@ create table if not exists public.questions_v2 (
   question_number integer not null,
   statement text not null,
   alternatives jsonb not null default '[]'::jsonb,
+  answer_key_option text check (answer_key_option is null or answer_key_option in ('A','B','C','D','E','F','G','H','*')),
   extraction_warnings jsonb not null default '[]'::jsonb,
   source_page_range text,
   status text not null default 'pending_ai' check (status in ('pending_ai','processing_ai','needs_review','approved')),
@@ -43,6 +44,7 @@ create table if not exists public.questions_v2 (
   ai_processed_at timestamptz,
   raw_payload jsonb not null default '{}'::jsonb
 );
+alter table public.questions_v2 add column if not exists answer_key_option text check (answer_key_option is null or answer_key_option in ('A','B','C','D','E','F','G','H','*'));
 
 create index if not exists question_imports_catalog_idx on public.question_imports(concurso, edicao, ano, banca);
 create index if not exists questions_v2_status_idx on public.questions_v2(status, created_at);

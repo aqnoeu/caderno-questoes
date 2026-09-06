@@ -18,17 +18,27 @@ function parseAnswerKeyV2(value) {
 }
 
 function pageLines(content, viewport) {
-  const rows = [];
-  [...content.items].filter((item) => item.str?.trim()).forEach((item) => {
-    const y = item.transform[5], x = item.transform[4];
-    let row = rows.find((entry) => Math.abs(entry.y - y) < 3);
-    if (!row) { row = { y, items: [] }; rows.push(row); }
-    row.items.push({ x, text: item.str });
+  const items = [...content.items].filter((item) => item.str?.trim()).map((item) => ({ y:item.transform[5], x:item.transform[4], text:item.str }));
+  // Muitas provas (inclusive OAB) usam duas colunas. Misturá-las cria A/B/C/D/E
+  // duplicadas e une duas questões diferentes. Cada coluna é lida de cima para baixo.
+  const left = items.filter((item) => item.x < viewport.width * .52);
+  const right = items.filter((item) => item.x >= viewport.width * .52);
+  const columns = right.length > Math.max(14, left.length * .14) ? [left, right] : [items];
+  return columns.flatMap((column) => {
+    const rows = [];
+    column.forEach((item) => {
+      let row = rows.find((entry) => Math.abs(entry.y - item.y) < 3);
+      if (!row) { row = { y:item.y, items:[] }; rows.push(row); }
+      row.items.push(item);
+    });
+    return rows.sort((a, b) => b.y - a.y).map((row) => ({
+      text:cleanSpace(row.items.sort((a, b) => a.x - b.x).map((item) => item.text).join(" ")),
+      // O número da questão pode ficar muito próximo do topo (como na OAB).
+      // Por isso, só tratamos as faixas extremas como cabeçalho/rodapé; uma
+      // margem ampla aqui eliminava indevidamente as questões 1, 3, 5...
+      zone:row.y > viewport.height * .94 ? "header" : row.y < viewport.height * .06 ? "footer" : "body",
+    })).filter((row) => row.text);
   });
-  return rows.sort((a, b) => b.y - a.y).map((row) => ({
-    text: cleanSpace(row.items.sort((a, b) => a.x - b.x).map((item) => item.text).join(" ")),
-    zone: row.y > viewport.height * .84 ? "header" : row.y < viewport.height * .16 ? "footer" : "body",
-  })).filter((row) => row.text);
 }
 
 async function extractPdfV2(file) {
@@ -46,22 +56,38 @@ async function extractPdfV2(file) {
   const pageTexts = pages.map((lines) => lines.filter((line) => {
     const key = `${line.zone}:${normalized(line.text)}`;
     const looksLikePageNumber = /^(p[aá]gina\s*)?\d+(\s*de\s*\d+)?$/i.test(line.text.trim());
-    return !(looksLikePageNumber || (line.zone !== "body" && repeatedLayout.has(key)));
+    // Números isolados no corpo são marcadores válidos de questão em provas
+    // como a OAB. Somente números nas faixas de rodapé/cabeçalho são paginação.
+    return !((line.zone !== "body" && looksLikePageNumber) || (line.zone !== "body" && repeatedLayout.has(key)));
   }).map((line) => line.text).join("\n"));
   return { pageCount: pdf.numPages, text: pageTexts.join("\n\n"), removedLayoutLines: repeatedLayout.size };
 }
 
 function startsQuestion(line) {
-  return line.match(/^\s*(?:quest[ãa]o\s*)?(\d{1,3})\s*(?:[.)º°-]|\b)\s+/i);
+  // Alguns cadernos colocam apenas o número, sozinho, antes de cada enunciado.
+  // A numeração de página já é descartada durante a leitura do PDF.
+  return line.match(/^\s*(?:quest[ãa]o\s*)?(\d{1,3})(?:\s*(?:[.)º°-])\s+|\s*$)/i);
 }
 function startsOption(line) {
   return line.match(new RegExp(`^\\s*(?:\\(?([${optionLetters}])\\)?[).:-])\\s+`, "i"));
 }
 function parseQuestionsV2(text) {
-  const lines = String(text || "").replace(/\r/g, "").split("\n").map(cleanSpace).filter(Boolean);
-  const starts = lines.map((line, index) => ({ index, match: startsQuestion(line) })).filter((entry) => entry.match);
+  const allLines = String(text || "").replace(/\r/g, "").split("\n").map(cleanSpace).filter(Boolean);
+  // O questionário de percepção vem depois da prova objetiva e não integra o
+  // banco. Cortamos o documento no título, antes mesmo de ele reiniciar em 1.
+  const surveyStart = allLines.findIndex((line) => /question[aá]rio\s+de\s+percep[cç][aã]o\s+sobre\s+a\s+prova/i.test(line));
+  const lines = surveyStart > -1 ? allLines.slice(0, surveyStart) : allLines;
+  const explicitStarts = lines.map((line, index) => ({ index, match:line.match(/^\s*quest[ãa]o\s*(\d{1,3})\s*(?:[.)º°-]|\b)\s*/i) })).filter((entry) => entry.match);
+  // Quando a própria prova usa “QUESTÃO 01”, ele é mais confiável que números de
+  // regras/instruções. Só usamos numeração simples como fallback.
+  const candidateStarts = explicitStarts.length >= 2 ? explicitStarts : lines.map((line, index) => ({ index, match: startsQuestion(line) })).filter((entry) => entry.match);
+  // Alguns cadernos acrescentam, após a prova, um questionário que reinicia em
+  // “1”. Ele não é questão objetiva e não deve entrar no banco de questões.
+  const restartIndex = candidateStarts.findIndex((entry, index) => index > 0 && Number(entry.match[1]) === 1 && Math.max(...candidateStarts.slice(0, index).map((item) => Number(item.match[1]))) >= 20);
+  const starts = restartIndex > -1 ? candidateStarts.slice(0, restartIndex) : candidateStarts;
+  const finalQuestionEnd = restartIndex > -1 ? candidateStarts[restartIndex].index : lines.length;
   return starts.map((start, index) => {
-    const end = index + 1 < starts.length ? starts[index + 1].index : lines.length;
+    const end = index + 1 < starts.length ? starts[index + 1].index : finalQuestionEnd;
     const block = lines.slice(start.index, end);
     block[0] = block[0].replace(startsQuestion(block[0])[0], "").trim();
     const options = block.map((line, i) => ({ i, match: startsOption(line) })).filter((entry) => entry.match);
@@ -74,6 +100,7 @@ function parseQuestionsV2(text) {
     const warnings = [];
     if (!statement || statement.length < 30) warnings.push("Enunciado muito curto ou possivelmente incompleto.");
     if (alternatives.length < 2) warnings.push("Quantidade incomum de alternativas.");
+    if (new Set(alternatives.map((item) => item.letter)).size !== alternatives.length) warnings.push("Alternativas repetidas detectadas: verifique se o PDF possui duas colunas.");
     if (!alternatives.at(-1)?.text || alternatives.at(-1).text.length < 2) warnings.push("Última alternativa parece incompleta.");
     if (/\b(p[aá]gina|www\.|todos os direitos reservados|fgv conhecimento)\b/i.test(alternatives.at(-1)?.text || "")) warnings.push("Trecho potencialmente pertencente ao rodapé na última alternativa.");
     if (block.length > 18 && !/\n/.test(statement)) warnings.push("Possível quebra de página ou estrutura longa: revise o enunciado.");

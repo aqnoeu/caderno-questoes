@@ -110,8 +110,47 @@ function parseQuestionsV2(text) {
 
 const emptyMetadata = { concurso: "", edicao: "", ano: new Date().getFullYear(), banca: "", cargo: "", application_date: "" };
 
-export function System2Home({ openCadastro }) {
-  return <section className="system2-page"><span className="eyebrow">NOVA ARQUITETURA</span><h1>Sistema 2.0</h1><p className="system2-lead">Nova arquitetura de cadastro, análise e organização das questões.</p><div className="system2-flow"><b>Cadastro de Questões</b><i>→</i><b>Filtro de IA</b><i>→</i><b>Controle de Conteúdo</b><i>→</i><b>Sistema de Estudos</b></div><div className="system2-module-grid"><article className="card system2-module active"><span>01</span><h2>Cadastro de Questões</h2><p>Importação e estruturação inicial das provas, com revisão humana antes de qualquer salvamento.</p><em>Em desenvolvimento</em><button onClick={openCadastro}>Acessar Cadastro 2.0 →</button></article><article className="card system2-module"><span>02</span><h2>Filtro de IA</h2><p>Classificação jurídica, subtópicos, alternativas e conteúdo-base, em fila controlada no servidor.</p><em>Próxima etapa</em></article><article className="card system2-module"><span>03</span><h2>Controle de Conteúdo</h2><p>Organização futura: Concurso → Edição → Ano → Questões analisadas.</p><em>Próxima etapa</em></article></div><div className="system2-note">O Sistema 2.0 está sendo desenvolvido paralelamente ao sistema atual e ainda não interfere nas questões disponíveis aos usuários.</div></section>;
+export function System2Home({ openCadastro, openFilter, openContent }) {
+  return <section className="system2-page"><span className="eyebrow">NOVA ARQUITETURA</span><h1>Sistema 2.0</h1><p className="system2-lead">Nova arquitetura de cadastro, análise e organização das questões.</p><div className="system2-flow"><b>Cadastro de Questões</b><i>→</i><b>Filtro de IA</b><i>→</i><b>Controle de Conteúdo</b><i>→</i><b>Sistema de Estudos</b></div><div className="system2-module-grid"><article className="card system2-module active"><span>01</span><h2>Cadastro de Questões</h2><p>Importação e estruturação inicial das provas, com revisão humana antes de qualquer salvamento.</p><button onClick={openCadastro}>Acessar Cadastro 2.0 →</button></article><article className="card system2-module"><span>02</span><h2>Filtro de IA</h2><p>Acompanhe as questões pendentes, em análise e as que precisam de revisão humana.</p><button className="light" onClick={openFilter}>Acessar Filtro de IA →</button></article><article className="card system2-module"><span>03</span><h2>Controle de Conteúdo</h2><p>Consulte as questões aprovadas, agrupadas por concurso, edição e ano.</p><button className="light" onClick={openContent}>Acessar Controle de Conteúdo →</button></article></div><div className="system2-note">O Sistema 2.0 está sendo desenvolvido paralelamente ao sistema atual e ainda não interfere nas questões disponíveis aos usuários.</div></section>;
+}
+
+const statusInfo = {
+  pending_ai: { label:"Pendentes de análise", detail:"Aguardando o início do Filtro de IA." },
+  processing_ai: { label:"Em análise", detail:"A IA está processando esta questão." },
+  needs_review: { label:"Revisão necessária", detail:"A análise precisa de conferência humana." },
+  approved: { label:"Aprovadas", detail:"Prontas para a etapa de controle de conteúdo." },
+};
+
+function useSystem2Questions(supabase) {
+  const [questions, setQuestions] = React.useState([]), [loading, setLoading] = React.useState(true), [error, setError] = React.useState("");
+  const load = React.useCallback(async () => {
+    setLoading(true); setError("");
+    const { data, error: queryError } = await supabase.from("questions_v2").select("id, question_number, statement, status, ai_attempts, ai_last_error, ai_processed_at, created_at, import:question_imports(concurso, edicao, ano, banca)").order("created_at", { ascending:false });
+    if (queryError) setError(queryError.message); else setQuestions(data || []);
+    setLoading(false);
+  }, [supabase]);
+  React.useEffect(() => { load(); }, [load]);
+  return { questions, loading, error, reload:load };
+}
+
+function System2QuestionRow({ item }) {
+  const source = item.import || {};
+  return <article className="system2-tracking-row"><div><b>Questão {String(item.question_number).padStart(2, "0")}</b><p>{cleanSpace(item.statement).slice(0, 180)}{item.statement.length > 180 ? "…" : ""}</p><small>{source.concurso || "Concurso não informado"} · {source.edicao && `${source.edicao} · `}{source.ano || "—"} · {source.banca || "—"}</small></div><div className={`system2-status ${item.status}`}><b>{statusInfo[item.status]?.label || item.status}</b><small>{item.ai_processed_at ? `Processada em ${new Date(item.ai_processed_at).toLocaleDateString("pt-BR")}` : `Tentativas de IA: ${item.ai_attempts || 0}`}</small>{item.ai_last_error && <small className="system2-error">Último erro: {item.ai_last_error}</small>}</div></article>;
+}
+
+export function System2Filter({ supabase, onBack, openContent }) {
+  const { questions, loading, error, reload } = useSystem2Questions(supabase);
+  const [tab, setTab] = React.useState("pending_ai");
+  const tabs = ["pending_ai", "processing_ai", "needs_review"];
+  const selected = questions.filter((item) => item.status === tab);
+  return <section className="system2-page"><button className="link-button" onClick={onBack}>← Voltar ao Sistema 2.0</button><span className="eyebrow">ETAPA 02</span><h1>Filtro de IA</h1><p className="system2-lead">Acompanhe a fila real de análise. As questões só seguem ao Controle de Conteúdo quando forem aprovadas.</p><div className="system2-tabs">{tabs.map((id) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{statusInfo[id].label} <b>{questions.filter((item) => item.status === id).length}</b></button>)}</div><div className="system2-toolbar"><p>{statusInfo[tab].detail}</p><button className="light compact" onClick={reload}>Atualizar dados</button></div>{loading ? <p className="empty-state">Carregando a fila…</p> : error ? <p className="form-message">Não foi possível carregar a fila: {error}</p> : selected.length ? <div className="system2-tracking-list">{selected.map((item) => <System2QuestionRow key={item.id} item={item} />)}</div> : <div className="card empty-state"><b>Nenhuma questão nesta etapa.</b><p>Quando uma questão for salva no Cadastro 2.0, ela aparecerá em “Pendentes de análise”.</p></div>}<div className="system2-note">A automação de análise ainda será conectada ao Filtro de IA. Até lá, esta tela mostra fielmente o status já gravado no banco, sem simular processamento.</div><button className="light" onClick={openContent}>Ir para Controle de Conteúdo →</button></section>;
+}
+
+export function System2Content({ supabase, onBack }) {
+  const { questions, loading, error, reload } = useSystem2Questions(supabase);
+  const approved = questions.filter((item) => item.status === "approved");
+  const groups = approved.reduce((result, item) => { const source = item.import || {}; const key = [source.concurso || "Sem concurso", source.edicao || "", source.ano || "", source.banca || ""].join("|"); (result[key] ||= { source, items:[] }).items.push(item); return result; }, {});
+  return <section className="system2-page"><button className="link-button" onClick={onBack}>← Voltar ao Sistema 2.0</button><span className="eyebrow">ETAPA 03</span><h1>Controle de Conteúdo</h1><p className="system2-lead">Questões aprovadas pelo Filtro de IA, organizadas para a próxima etapa de publicação.</p><div className="system2-toolbar"><p><b>{approved.length}</b> questão(ões) aprovada(s) no Sistema 2.0.</p><button className="light compact" onClick={reload}>Atualizar dados</button></div>{loading ? <p className="empty-state">Carregando questões aprovadas…</p> : error ? <p className="form-message">Não foi possível carregar as questões: {error}</p> : approved.length ? <div className="system2-content-groups">{Object.entries(groups).map(([key, group]) => <section className="card" key={key}><span className="eyebrow">{group.source.banca || "—"}</span><h2>{group.source.concurso || "Concurso não informado"}</h2><p>{group.source.edicao && `${group.source.edicao} · `}{group.source.ano || "Ano não informado"}</p><b>{group.items.length} questão(ões) aprovadas</b></section>)}</div> : <div className="card empty-state"><b>Ainda não há questões aprovadas.</b><p>Elas aparecerão aqui automaticamente depois que o Filtro de IA mudar o status para “approved”.</p></div>}<div className="system2-note">Aprovar uma questão ainda não a publica para os alunos. A integração com o Sistema de Estudos continua separada, como previsto.</div></section>;
 }
 
 export function System2Cadastro({ supabase, onBack }) {

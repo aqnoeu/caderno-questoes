@@ -6,4 +6,4 @@
 4. No SQL Editor, execute todo o arquivo `supabase/EXECUTAR_NO_SUPABASE_FILTRO_IA_2.sql`.
 5. No site, entre em **Painel administrativo → Filtro de IA 2.0**, defina o limite diário e o intervalo e ative a fila.
 
-Depois de ativada, o servidor verifica a fila a cada 5 minutos. Ele processa no máximo uma questão por intervalo; questões com resultado consistente viram `approved` e aparecem no **Controle 2.0**. Respostas incompletas, de baixa confiança ou com erro vão para **Revisão necessária**.
+Depois de ativada, o servidor verifica a fila a cada 5 minutos. Ele processa no máximo uma questão por intervalo; questões com resultado consistente viram `approved` e aparecem no **Controle 2.0**. Respostas incompletas ou de baixa confiança vão para **Revisão necessária**. Falhas temporárias do Gemini, como “high demand”, voltam automaticamente à fila com nova tentativa progressiva.

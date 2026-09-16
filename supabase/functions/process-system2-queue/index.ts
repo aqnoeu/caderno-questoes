@@ -48,7 +48,7 @@ Formato obrigatório:
     const confidence = Math.max(0, Math.min(1, Number(result.confidence || 0)));
     const complete = Boolean(String(result.discipline || "").trim() && subjects.length && String(result.central_rule || "").trim());
     const finalStatus = complete && confidence >= 0.6 ? "approved" : "needs_review";
-    const payload = { discipline:String(result.discipline || "").trim() || null, subjects, subtopics:cleanList(result.subtopics), legal_concepts:cleanList(result.legal_concepts), alternatives_analysis:result.correct_option_analysis && typeof result.correct_option_analysis === "object" ? result.correct_option_analysis : {}, legal_basis:String(result.legal_basis || "").trim() || null, central_rule:String(result.central_rule || "").trim() || null, legal_reasoning:String(result.legal_reasoning || "").trim() || null, study_content:String(result.study_content || "").trim() || null, ai_confidence:confidence, ai_result:result, ai_processed_at:new Date().toISOString(), ai_last_error:null, status:finalStatus };
+    const payload = { discipline:String(result.discipline || "").trim() || null, subjects, subtopics:cleanList(result.subtopics), legal_concepts:cleanList(result.legal_concepts), difficulty, alternatives_analysis:result.correct_option_analysis && typeof result.correct_option_analysis === "object" ? result.correct_option_analysis : {}, legal_basis:String(result.legal_basis || "").trim() || null, central_rule:String(result.central_rule || "").trim() || null, legal_reasoning:String(result.legal_reasoning || "").trim() || null, study_content:String(result.study_content || "").trim() || null, ai_confidence:confidence, ai_result:result, ai_processed_at:new Date().toISOString(), ai_last_error:null, status:finalStatus };
     const { error: updateError } = await admin.from("questions_v2").update(payload).eq("id", source.id);
     if (updateError) throw updateError;
     await admin.from("system2_ai_runs").update({ status:finalStatus, finished_at:new Date().toISOString(), result_summary:{ confidence, discipline:payload.discipline, subjects, final_status:finalStatus } }).eq("id", claimed.run_id);
@@ -56,7 +56,12 @@ Formato obrigatório:
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro inesperado no Filtro de IA.";
     if (claimed?.question_id) {
-      await admin.from("questions_v2").update({ status:"needs_review", ai_last_error:message }).eq("id", claimed.question_id);
+      // Falta momentânea de capacidade do Gemini não é falha da questão. Ela
+      // retorna à fila com espera progressiva, sem exigir ação do administrador.
+      const transient = /(high demand|temporar|429|resource[ _-]?exhausted|try again later|unavailable)/i.test(message);
+      const attempts = Number(claimed?.ai_attempts || 1);
+      const retryAt = new Date(Date.now() + Math.min(60, Math.max(5, attempts * 5)) * 60_000).toISOString();
+      await admin.from("questions_v2").update(transient ? { status:"pending_ai", ai_last_error:message, next_attempt_at:retryAt } : { status:"needs_review", ai_last_error:message }).eq("id", claimed.question_id);
       if (claimed.run_id) await admin.from("system2_ai_runs").update({ status:"failed", finished_at:new Date().toISOString(), error_message:message }).eq("id", claimed.run_id);
     }
     return json({ error:message, question_id:claimed?.question_id || null }, 500);

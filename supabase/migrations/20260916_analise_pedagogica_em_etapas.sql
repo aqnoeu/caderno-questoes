@@ -8,6 +8,14 @@ alter table public.questions_v2 add column if not exists is_test boolean not nul
 alter table public.questions_v2 add column if not exists promoted_question_id uuid references public.questions(id) on delete set null;
 create index if not exists questions_v2_pipeline_stage_idx on public.questions_v2(status, ai_stage, next_attempt_at);
 
+-- v53: renomeia a assinatura antiga (só p_trigger) para não ficar duas funções com o mesmo nome,
+-- o que tornaria ambígua a chamada feita pelo agendamento. Nada é apagado.
+do $$ begin
+  if exists (select 1 from pg_proc where proname = 'claim_system2_ai_question' and pronargs = 1 and pronamespace = 'public'::regnamespace) then
+    alter function public.claim_system2_ai_question(text) rename to claim_system2_ai_question_antiga;
+  end if;
+end $$;
+
 create or replace function public.claim_system2_ai_question(p_trigger text default 'scheduled', p_question_id uuid default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare settings public.system2_ai_settings%rowtype; item public.questions_v2%rowtype; run_id uuid; today_count integer;

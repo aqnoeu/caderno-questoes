@@ -1,17 +1,35 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-system2-cron-key" };
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+const SITE_ORIGIN = Deno.env.get("SITE_ORIGIN") || "https://caderno-questoes.vercel.app";
+const MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash";
+function corsFor(request: Request) {
+  const origin = request.headers.get("Origin") || "";
+  const allowed = origin === SITE_ORIGIN || /^https:\/\/caderno-questoes[a-z0-9-]*\.vercel\.app$/.test(origin) || /^http:\/\/localhost:\d+$/.test(origin);
+  return { "Access-Control-Allow-Origin": allowed ? origin : SITE_ORIGIN, "Vary": "Origin", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-system2-cron-key" };
+}
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const cleanList = (value: unknown) => Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean) : String(value || "").split(/[·;|]/).map((item) => item.trim()).filter(Boolean);
 async function askGemini(apiKey: string, prompt: string) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ contents:[{ parts:[{ text:prompt }] }], generationConfig:{ responseMimeType:"application/json", temperature:.08 } }) });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data?.error?.message || "Falha na análise pelo Gemini.");
-  return JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+  let status = 500, message = "Falha na análise pelo Gemini.";
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, { method:"POST", headers:{ "Content-Type":"application/json", "x-goog-api-key":apiKey }, body:JSON.stringify({ contents:[{ parts:[{ text:prompt }] }], generationConfig:{ responseMimeType:"application/json", temperature:.08 } }) });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) {
+      const text = String(data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      return JSON.parse(text);
+    }
+    status = response.status; message = data?.error?.message || message;
+    const quota = /quota|billing/i.test(message);
+    if ((status === 503 || status === 500 || (status === 429 && !quota)) && attempt < 3) { await sleep(attempt * 1500); continue; }
+    break;
+  }
+  throw new Error(message);
 }
 
 Deno.serve(async (request) => {
+  const cors = corsFor(request);
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
   if (request.method === "OPTIONS") return new Response("ok", { headers:cors });
   const admin = createClient(Deno.env.get("SUPABASE_URL") || "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "", { auth:{ persistSession:false } });
   let claimed: any = null;

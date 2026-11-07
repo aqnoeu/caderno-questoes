@@ -2,6 +2,14 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## v55 — 2026-11-06
+
+- Desafio diário: agora pode ter 5 (como antes) ou 10 questões. O tamanho é guardado em cada desafio (`daily_challenges.question_count`); os desafios já existentes continuam com 5 e o ranking segue por desafio. Banco, função de resposta, trava de publicação e telas do aluno e do administrador deixaram de ter o 5 fixo.
+- Nova função `generate-challenge-statements` (só administrador): adapta questões já cadastradas (acervo atual ou Modelo novo aprovadas) em afirmações de Sim/Não. Pula enunciados negativos ("assinale a incorreta"), anulados e sem gabarito. As afirmações entram como rascunho, ligadas à questão de origem, e só valem após aprovação.
+- Nova função `compose-daily-challenge` (só administrador): a IA escolhe as questões do dia entre as aprovadas, equilibrando Sim/Não e disciplinas, evitando repetição recente e priorizando as que os alunos mais erram; se a IA falhar, usa uma escolha por regra. Salva como rascunho para o administrador revisar e publicar.
+- Tela "Desafios diários": seção "Afirmações geradas pela IA" (gerar, aprovar, editar, rejeitar), seletor de tamanho (5 ou 10) e botão "Sugerir com IA". Só foram acrescentadas regras de estilo; nenhuma existente mudou.
+- Migração `20261106_v55_desafio_rascunhos_ia_e_dez_questoes.sql`. Backup: branch `backup/2026-11-06-antes-v55` e schema `backup_20261106` no banco.
+
 ## v54 — 2026-11-06
 
 - Modelo novo (Filtro de IA e Controle de Conteúdo): as questões agora aparecem em fichas em grade, no mesmo formato do sistema atual, com mais informações (status, dificuldade, etapas da análise, gabarito, concurso, banca, ano/edição, nº de alternativas, confiança ou tentativas da IA, data de cadastro, ID, alertas de extração, erro da IA).

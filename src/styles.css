@@ -781,3 +781,12 @@ button.annulled {
 .system2-filters { grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(150px, 1fr)); }
 @media (max-width: 760px) { .system2-filters { grid-template-columns: 1fr; } .system2-ficha-meta { grid-template-columns: 1fr 1fr; } }
 .system2-ficha-tags span { font-size: 11px; font-weight: 700; margin-left: 0; }
+
+/* v55: afirmações geradas pela IA e desafio de 5 ou 10 questões */
+.challenge-ai { display: grid; gap: 14px; margin: 18px 0; }
+.challenge-ai h2 { margin: 0 0 4px; }
+.challenge-ai p { margin: 0; color: #697388; }
+.challenge-ai-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.challenge-ai-controls label { display: grid; gap: 4px; font-size: 13px; }
+.builder-head-fields { display: flex; flex-wrap: wrap; gap: 12px; }
+.builder-head-fields label { display: grid; gap: 4px; font-size: 13px; }

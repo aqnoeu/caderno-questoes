@@ -2,6 +2,12 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## v54 — 2026-11-06
+
+- Modelo novo (Filtro de IA e Controle de Conteúdo): as questões agora aparecem em fichas em grade, no mesmo formato do sistema atual, com mais informações (status, dificuldade, etapas da análise, gabarito, concurso, banca, ano/edição, nº de alternativas, confiança ou tentativas da IA, data de cadastro, ID, alertas de extração, erro da IA).
+- Filtros iguais aos do sistema atual: abas por concurso, busca por texto/número/ID, disciplina e dificuldade.
+- "Ler e revisar" abre a ficha em largura total para edição, como antes. Nenhuma regra de estilo existente foi alterada; só foram acrescentadas regras novas para as fichas.
+
 ## v53 — 2026-11-05
 
 - Auditoria e limpeza: removidos 3 zips antigos, 3 cópias soltas de `main-*.jsx`, 2 SQLs avulsos e componentes sem uso (`EssayAdminLegacy`, `EssayStudyLegacy`, `LegacyStudy`, `System2QuestionCard`). O visual não mudou (CSS e JS gerados idênticos aos da v52).

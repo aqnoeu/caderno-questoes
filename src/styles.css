@@ -757,3 +757,27 @@ button.annulled {
 /* O painel começa imediatamente após o botão do usuário: sem faixa que fecha o menu no hover. */
 .profile-menu > div { top: calc(100% - 1px); }
 @media (max-width: 900px) { .app-header { gap: 20px 10px; padding: 24px 0 20px; }.app-header .user-nav { width: 100%; } }
+
+/* v54: fichas do Modelo novo em grade, no mesmo formato das questões do sistema atual */
+.system2-grid { align-items: start; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.system2-grid .system2-span { grid-column: 1 / -1; }
+.system2-ficha { display: flex; flex-direction: column; gap: 0; }
+.system2-ficha .card-top { flex-wrap: wrap; justify-content: flex-start; }
+.system2-ficha .card-top .difficulty { margin-left: auto; }
+.system2-chip { font-size: 11px; font-weight: 800; border-radius: 99px; padding: 3px 8px; background: #edf3ff; color: #1b5bc4; }
+.system2-chip.approved { background: #e7f8ef; color: #137a51; }
+.system2-chip.needs_review { background: #ffe1e4; color: #a82f38; }
+.system2-chip.processing_ai { background: #fff3ce; color: #805900; }
+.system2-mini-steps { display: grid; gap: 4px; margin: 0 0 13px; font-size: 11px; color: #8a97ad; }
+.system2-mini-steps span.complete { color: #137a51; font-weight: 700; }
+.system2-ficha-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 0; }
+.system2-ficha-meta div { min-width: 0; }
+.system2-ficha-meta dt { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: #8a97ad; }
+.system2-ficha-meta dd { margin: 1px 0 0; font-size: 12px; color: #34445f; font-weight: 700; overflow-wrap: anywhere; }
+.system2-ficha-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.system2-ficha-error { margin: 10px 0 0; font-size: 12px; color: #a82f38; background: #fff1f2; border-radius: 9px; padding: 8px 10px; }
+.system2-count { margin: 0; color: #697388; font-size: 13px; }
+.system2-filters { margin-bottom: 0; }
+.system2-filters { grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(150px, 1fr)); }
+@media (max-width: 760px) { .system2-filters { grid-template-columns: 1fr; } .system2-ficha-meta { grid-template-columns: 1fr 1fr; } }
+.system2-ficha-tags span { font-size: 11px; font-weight: 700; margin-left: 0; }

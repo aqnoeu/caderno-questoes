@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // v55: adapta questões já cadastradas (acervo atual ou Modelo novo) em afirmações de Sim/Não para o desafio diário.
 // Só o administrador chama. As afirmações entram como RASCUNHO (inativas) e dependem de aprovação.
-// Entrada: { source: "acervo" | "modelo_novo", question_ids?: string[], limit?: number (1-10) }
+// Entrada: { source: "acervo" | "modelo_novo", question_ids?: string[], exclude_ids?: string[], limit?: number (1-10) }
 // Saída:   { created, skipped: [{id, reason}], considered }
 
 const SITE_ORIGIN = Deno.env.get("SITE_ORIGIN") || "https://caderno-questoes.vercel.app";
@@ -64,6 +64,7 @@ Deno.serve(async (request) => {
     const kind = body.source === "modelo_novo" ? "modelo_novo" : "acervo";
     const limit = Math.max(1, Math.min(MAX_SOURCES, Number(body.limit) || 5));
     const requestedIds: string[] = Array.isArray(body.question_ids) ? body.question_ids.map(String).slice(0, MAX_SOURCES) : [];
+    const excludedIds = new Set<string>(Array.isArray(body.exclude_ids) ? body.exclude_ids.map(String).slice(0, 200) : []);
 
     // Origens já adaptadas (qualquer rascunho, aprovada ou rejeitada) não são adaptadas de novo.
     const { data: used } = await admin.from("challenge_questions").select("source_question_id").eq("source_kind", kind).not("source_question_id", "is", null);
@@ -88,6 +89,7 @@ Deno.serve(async (request) => {
     const usable: any[] = [];
     for (const item of candidates.sort(() => Math.random() - 0.5)) {
       if (usable.length >= limit) break;
+      if (excludedIds.has(String(item.id))) continue;
       if (usedIds.has(String(item.id))) { if (requestedIds.length) skipped.push({ id: item.id, reason: "Já adaptada antes." }); continue; }
       if (!item.statement || item.alternatives.length < 2 || !item.correct) { skipped.push({ id: item.id, reason: "Questão incompleta ou sem gabarito." }); continue; }
       if (!item.alternatives.some((alt: any) => alt.letter === item.correct)) { skipped.push({ id: item.id, reason: "Gabarito não corresponde a nenhuma alternativa." }); continue; }

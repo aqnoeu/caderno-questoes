@@ -2,6 +2,13 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## v56 — 2026-11-07
+
+- "Gerar com IA" (afirmações do desafio): agora adapta uma questão por vez, com barra de progresso e porcentagem ("Adaptando a questão 2 de 5… 40%"). Os rascunhos aparecem na lista conforme ficam prontos e a lista se atualiza ao final mesmo se houver erro. Evita esperas longas numa única chamada.
+- "Sugerir com IA" (desafio do dia): barra de progresso animada enquanto a IA escolhe.
+- `generate-challenge-statements`: novo parâmetro `exclude_ids` para não repetir questões já puladas.
+- Reaproveitada a barra de progresso já existente no Filtro de IA; só foram acrescentadas regras de estilo.
+
 ## v55 — 2026-11-06
 
 - Desafio diário: agora pode ter 5 (como antes) ou 10 questões. O tamanho é guardado em cada desafio (`daily_challenges.question_count`); os desafios já existentes continuam com 5 e o ranking segue por desafio. Banco, função de resposta, trava de publicação e telas do aluno e do administrador deixaram de ter o 5 fixo.

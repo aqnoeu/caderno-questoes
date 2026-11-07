@@ -790,3 +790,9 @@ button.annulled {
 .challenge-ai-controls label { display: grid; gap: 4px; font-size: 13px; }
 .builder-head-fields { display: flex; flex-wrap: wrap; gap: 12px; }
 .builder-head-fields label { display: grid; gap: 4px; font-size: 13px; }
+
+/* v56: barra de progresso das ações de IA do desafio diário */
+.challenge-progress { margin: 4px 0; }
+.system2-progress.indeterminate { position: relative; overflow: hidden; }
+.system2-progress.indeterminate i { width: 35%; position: absolute; left: 0; animation: challenge-indeterminate 1.3s ease-in-out infinite; }
+@keyframes challenge-indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }

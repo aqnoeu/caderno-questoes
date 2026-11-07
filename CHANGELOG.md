@@ -2,6 +2,15 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## v58 — 2026-11-07
+
+- Banco de afirmações do desafio (aprovadas e em aprovação): linhas padronizadas, com botões do mesmo tamanho e alinhados (em coluna no computador, em 2 colunas no celular).
+- Busca por um ou vários IDs ao mesmo tempo (separados por espaço, vírgula ou com "#"), nas duas listas; a busca por texto continua. IDs que não aparecem na lista são avisados, dizendo se estão em outra lista.
+- Seleção em lote: caixa de seleção em cada linha, "Selecionar tudo" / "Desmarcar tudo" (sobre o que está exibido). Em aprovação: Aprovar, Rejeitar e Copiar para conferir em lote. Nas aprovadas: Marcar disponível/indisponível, Copiar para conferir, Devolver para aprovação e Rejeitar em lote.
+- Lista "Rejeitadas": as rejeitadas ficam guardadas e podem voltar para aprovação (nada é apagado).
+- Registro interno contra repetição: cada afirmação tem uma "impressão digital" única do texto (ignora acentos, maiúsculas e pontuação), valendo também para as rejeitadas; o mesmo vale para a origem (questão + resposta). A geração por IA ainda pula afirmações muito parecidas com as existentes (exceto o par certa/errada da mesma questão), e o cadastro manual e em lote avisa e ignora as repetidas.
+- Migração `20261107_v58_registro_afirmacoes_sem_repeticao.sql`; função `generate-challenge-statements` atualizada. Backup: branch `backup/2026-11-07-antes-v58`.
+
 ## v57 — 2026-11-07
 
 - Afirmações geradas pela IA: botão "Copiar rascunhos para conferir em outra IA" (todos os rascunhos) e "Copiar para conferir" em cada ficha. O texto copiado traz no topo o comando para o revisor (conferir a veracidade com a legislação vigente na data, citar fundamento, responder CONFERE / NÃO CONFERE / INCERTO, apontar problemas de redação e sugerir dificuldade) e, abaixo, as afirmações com ID, resposta, explicação e fundamento indicados. Se o navegador não permitir copiar, o texto aparece numa caixa para copiar manualmente.

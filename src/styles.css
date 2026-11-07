@@ -799,3 +799,29 @@ button.annulled {
 
 /* v57: texto para conferência em outra IA */
 .challenge-review-text { width: 100%; font-size: 13px; }
+
+/* v58: linhas padronizadas, seleção em lote e busca por IDs no banco de afirmações */
+.challenge-question-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 176px; gap: 14px; align-items: start; }
+.challenge-question-row.picked { border-color: #1463df; background: #f7faff; }
+.challenge-question-row > div.challenge-row-body { display: grid; gap: 5px; min-width: 0; }
+.challenge-question-row > div.challenge-row-actions { display: grid; gap: 8px; align-content: start; max-width: none; }
+.challenge-row-actions button { width: 100%; min-height: 38px; padding: 8px 10px; font-size: 12px; line-height: 1.2; white-space: normal; text-align: center; }
+.challenge-row-check { display: grid; place-items: center; padding-top: 3px; cursor: pointer; }
+.challenge-row-check input { width: 20px; height: 20px; margin: 0; }
+.challenge-bulkbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; margin: 10px 0 12px; padding: 10px 12px; border: 1px solid #e0eaf6; border-radius: 11px; background: #fbfdff; }
+.challenge-bulk-select { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; color: #526d93; font-size: 13px; }
+.challenge-bulk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.challenge-bulk-actions button, .challenge-bulk-select button { min-height: 36px; padding: 8px 12px; font-size: 12px; }
+.challenge-missing { display: block; margin: -4px 0 10px; color: #a82f38; font-size: 12px; }
+.challenge-ai .challenge-filters { margin: 4px 0 8px; }
+.challenge-ai .challenge-filters select { width: auto; min-width: 220px; }
+@media (max-width: 780px) {
+  .challenge-question-row { grid-template-columns: auto minmax(0, 1fr); }
+  .challenge-question-row > div.challenge-row-actions { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .challenge-bulk-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .challenge-bulk-actions button { width: 100%; }
+  .challenge-ai .challenge-filters select { width: 100%; }
+}
+@media (max-width: 780px) {
+  .challenge-question-row > div.challenge-row-actions > button:last-child:nth-child(odd), .challenge-bulk-actions > button:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}

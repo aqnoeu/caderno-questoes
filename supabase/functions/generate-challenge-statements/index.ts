@@ -140,7 +140,14 @@ Formato: {"items":[{"index":0,"statements":[{"correct_answer":true,"statement":"
     if (rows.length) {
       const { data: existing } = await admin.from("challenge_questions").select("source_question_id, correct_answer").eq("source_kind", kind).in("source_question_id", [...new Set(rows.map((row) => row.source_question_id))]);
       const have = new Set((existing || []).map((row: any) => `${row.source_question_id}:${row.correct_answer}`));
-      const fresh = rows.filter((row) => !have.has(`${row.source_question_id}:${row.correct_answer}`));
+      // Registro interno: pula afirmações muito parecidas com alguma que já existe (inclusive rejeitadas), exceto o par da mesma questão de origem.
+      const fresh: any[] = [];
+      for (const row of rows) {
+        if (have.has(`${row.source_question_id}:${row.correct_answer}`)) continue;
+        const { data: similar } = await admin.rpc("find_similar_challenge_statements", { p_statement: row.statement, p_threshold: 0.75, p_exclude_source: row.source_question_id });
+        if (similar?.length) { skipped.push({ id: row.source_question_id, reason: `Muito parecida com a afirmação #${String(similar[0].id).slice(0, 8)} que já existe.` }); continue; }
+        fresh.push(row);
+      }
       for (const row of fresh) {
         const { error } = await admin.from("challenge_questions").insert(row);
         if (!error) created++;
@@ -149,6 +156,7 @@ Formato: {"items":[{"index":0,"statements":[{"correct_answer":true,"statement":"
     }
     const covered = new Set(rows.map((row) => row.source_question_id));
     for (const item of usable) if (!covered.has(item.id)) skipped.push({ id: item.id, reason: "A IA não conseguiu adaptar com fidelidade." });
+    // Origem já registrada por duplicidade não deve ser sorteada de novo na mesma rodada.
     return json({ created, skipped, considered: usable.length });
   } catch (error) {
     if (error instanceof GeminiError) return json({ error: error.message }, error.status);

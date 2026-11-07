@@ -2,6 +2,11 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## v57 — 2026-11-07
+
+- Afirmações geradas pela IA: botão "Copiar rascunhos para conferir em outra IA" (todos os rascunhos) e "Copiar para conferir" em cada ficha. O texto copiado traz no topo o comando para o revisor (conferir a veracidade com a legislação vigente na data, citar fundamento, responder CONFERE / NÃO CONFERE / INCERTO, apontar problemas de redação e sugerir dificuldade) e, abaixo, as afirmações com ID, resposta, explicação e fundamento indicados. Se o navegador não permitir copiar, o texto aparece numa caixa para copiar manualmente.
+- Somente acréscimos de interface; nenhuma regra de estilo existente mudou.
+
 ## v56 — 2026-11-07
 
 - "Gerar com IA" (afirmações do desafio): agora adapta uma questão por vez, com barra de progresso e porcentagem ("Adaptando a questão 2 de 5… 40%"). Os rascunhos aparecem na lista conforme ficam prontos e a lista se atualiza ao final mesmo se houver erro. Evita esperas longas numa única chamada.

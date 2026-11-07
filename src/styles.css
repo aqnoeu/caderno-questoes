@@ -796,3 +796,6 @@ button.annulled {
 .system2-progress.indeterminate { position: relative; overflow: hidden; }
 .system2-progress.indeterminate i { width: 35%; position: absolute; left: 0; animation: challenge-indeterminate 1.3s ease-in-out infinite; }
 @keyframes challenge-indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+
+/* v57: texto para conferência em outra IA */
+.challenge-review-text { width: 100%; font-size: 13px; }

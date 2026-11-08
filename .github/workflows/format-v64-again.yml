@@ -1,0 +1,29 @@
+name: Conferir formatação v64 (temporário)
+on:
+  push:
+    branches:
+      - feature/v64-modo-revanche
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run format -- src/revenge.jsx supabase/functions/revenge-mode/index.ts
+      - run: npm run format:check -- src/revenge.jsx supabase/functions/revenge-mode/index.ts
+      - run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/revenge.jsx supabase/functions/revenge-mode/index.ts
+            git commit -m "style: conferir Prettier v64"
+            git push origin HEAD:feature/v64-modo-revanche
+          fi

@@ -4,10 +4,80 @@ async function requestRevenge(supabase, notebookId, cycleId, action, extra = {})
   const { data, error } = await supabase.functions.invoke("revenge-mode", {
     body: { action, notebook_id: notebookId, cycle_id: cycleId, ...extra },
   });
-  if (error) throw Error(data?.error || error.message || "Não foi possível contactar o servidor.");
-  if (data?.error) throw Error(data.error);
+  if (error) {
+    let detail = data?.error;
+    if (!detail && error.context) {
+      try {
+        const response = typeof error.context.clone === "function" ? error.context.clone() : error.context;
+        const payload = await response.json();
+        detail = payload.error || payload.message;
+      } catch {
+        // Falha de rede ou resposta não JSON: manter mensagem legível.
+      }
+    }
+    throw new Error(detail || "Não foi possível conversar com o Caderno. Verifique a conexão e tente novamente.");
+  }
+  if (data?.error) throw new Error(data.error);
   return data;
 }
+
+function ChatBubble({ message, showAvatar, mascot }) {
+  return (
+    <div className={"revenge-message revenge-message-" + message.role}>
+      {message.role === "bot" && showAvatar && (
+        <img className="revenge-avatar" src={mascot} alt="Caderno, mascote do aplicativo" />
+      )}
+      <div className="revenge-bubble">
+        {message.title && <strong>{message.title}</strong>}
+        <span>{message.text}</span>
+      </div>
+    </div>
+  );
+}
+
+function TypingBubble({ showAvatar, mascot }) {
+  return (
+    <div className="revenge-message revenge-message-bot" aria-label="Caderno está digitando">
+      {showAvatar && <img className="revenge-avatar" src={mascot} alt="" />}
+      <div className="revenge-bubble revenge-dots" aria-hidden="true">
+        <i /><i /><i />
+      </div>
+    </div>
+  );
+}
+
+function Dialogue({ messages, phaseKey, busy, mascotEnabled, children }) {
+  const [shown, setShown] = React.useState(0);
+  const threadRef = React.useRef(null);
+  React.useEffect(() => {
+    setShown(0);
+    const timeouts = messages.map((_, i) => window.setTimeout(() => setShown(i + 1), 180 + i * 720));
+    return () => timeouts.forEach(window.clearTimeout);
+  }, [phaseKey, messages.length]);
+  React.useEffect(() => {
+    if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
+  }, [shown, busy, phaseKey]);
+  const fullyShown = shown >= messages.length;
+  return (
+    <section className="revenge-chat">
+      <header className="revenge-chat-header">
+        {mascotEnabled && <img className="revenge-header-avatar" src="/mascote-caderno.webp" alt="" />}
+        <div><strong>Caderno</strong><small>Seu parceiro de estudos · Revanche</small></div>
+        <span className="revenge-online" title="Modo Revanche ativo" />
+      </header>
+      <div className="revenge-chat-thread" ref={threadRef} aria-live="polite" aria-relevant="additions text">
+        {messages.slice(0, shown).map((message, i) => (
+          <ChatBubble key={i + "-" + phaseKey} message={message}
+            mascot="/mascote-caderno.webp" showAvatar={mascotEnabled} />
+        ))}
+        {(!fullyShown || busy) && <TypingBubble showAvatar={mascotEnabled} mascot="/mascote-caderno.webp" />}
+      </div>
+      {fullyShown && !busy && <footer className="revenge-chat-footer">{children}</footer>}
+      {busy && <footer className="revenge-chat-footer revenge-chat-wait">Preparando sua próxima mensagem…</footer>}
+    </section>
+  );
+}
+
 export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBack }) {
   const [cycles, setCycles] = React.useState([]);
   const [history, setHistory] = React.useState([]);
@@ -15,301 +85,213 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
   const [cycleId, setCycleId] = React.useState(initialCycleId || "");
   const [busy, setBusy] = React.useState(false);
   const [result, setResult] = React.useState(null);
+  const [lastAnswer, setLastAnswer] = React.useState(null);
   const [message, setMessage] = React.useState("");
   const [showMascot, setShowMascot] = React.useState(
     () => localStorage.getItem("revenge-mascot-" + userId) !== "off",
   );
-  const [selected, setSelected] = React.useState(null);
+
   const readHistory = React.useCallback(async () => {
     const [{ data: rows, error }, log] = await Promise.all([
-      supabase
-        .from("study_cycles")
-        .select(
-          "id,completed_at,question_ids,progress,concurso,banca,ano,correct_count,wrong_count",
-        )
-        .eq("user_id", userId)
-        .eq("notebook_id", notebookId)
-        .not("completed_at", "is", null)
-        .order("completed_at", { ascending: false })
-        .limit(50),
+      supabase.from("study_cycles")
+        .select("id,completed_at,question_ids,progress,concurso,banca,ano,correct_count,wrong_count")
+        .eq("user_id", userId).eq("notebook_id", notebookId)
+        .not("completed_at", "is", null).order("completed_at", { ascending: false }).limit(50),
       requestRevenge(supabase, notebookId, null, "history"),
     ]);
     if (error) throw error;
     setCycles((rows || []).filter((row) => row.progress?.includes("wrong")));
     setHistory(log.sessions || []);
   }, [supabase, userId, notebookId]);
+
   React.useEffect(() => {
-    let alive = true;
-    readHistory().catch((error) => {
-      if (alive) setMessage(error.message);
-    });
-    return () => {
-      alive = false;
-    };
+    let active = true;
+    readHistory().catch((e) => { if (active) setMessage(e.message); });
+    return () => { active = false; };
   }, [readHistory]);
   React.useEffect(() => {
     if (!initialCycleId) {
-      setCycleId("");
       setSession(null);
+      setCycleId("");
       setResult(null);
       return;
     }
-    let alive = true;
-    setCycleId(initialCycleId);
+    let active = true;
     setSession(null);
+    setCycleId(initialCycleId);
     setResult(null);
     requestRevenge(supabase, notebookId, initialCycleId, "state")
-      .then((data) => {
-        if (alive) setSession(data);
-      })
+      .then((data) => { if (active) setSession(data); })
       .catch(() => {});
-    return () => {
-      alive = false;
-    };
+    return () => { active = false; };
   }, [initialCycleId, notebookId, supabase]);
+
   async function doAction(action, extra = {}) {
     if (busy || !cycleId) return;
     setBusy(true);
     setMessage("");
     try {
-      const data = await requestRevenge(supabase, notebookId, cycleId, action, extra);
+      const response = await requestRevenge(supabase, notebookId, cycleId, action, extra);
       if (action === "answer") {
-        setResult(data);
-        setSelected(null);
+        setLastAnswer(extra.answer);
+        setResult(response);
       } else {
-        setSession(data);
+        setSession(response);
         setResult(null);
-        setSelected(null);
+        setLastAnswer(null);
       }
-      if (action === "start" || (action === "answer" && data.finished)) await readHistory();
-    } catch (error) {
-      setMessage(error.message);
+      if (action === "start" || (action === "answer" && response.finished)) await readHistory();
+    } catch (e) {
+      setMessage(e.message);
     } finally {
       setBusy(false);
     }
   }
-  function changeMascot() {
-    setShowMascot((old) => {
-      localStorage.setItem("revenge-mascot-" + userId, old ? "off" : "on");
-      return !old;
+
+  function toggleMascot() {
+    setShowMascot((previous) => {
+      localStorage.setItem("revenge-mascot-" + userId, previous ? "off" : "on");
+      return !previous;
     });
   }
-  const active = cycles.find((x) => x.id === cycleId),
-    archived = history.find((x) => x.cycle_id === cycleId);
-  const errors =
-    active?.progress?.filter((x) => x === "wrong").length || session?.total_errors || 0;
+  const chosenCycle = cycles.find((x) => x.id === cycleId);
+  const savedSession = history.find((x) => x.cycle_id === cycleId);
+  const activeNumber = session?.completed_errors + 1 || 1;
+  const phase = !session ? "choose"
+    : session.state === "completed" ? "completed"
+    : result ? "feedback"
+    : session.current?.ready ? "question"
+    : "prepare";
+  const phaseKey = [
+    cycleId || "none", phase, session?.completed_errors || 0,
+    session?.current?.attempt_number || 0, result?.attempt || 0,
+  ].join(":");
+
+  const messages = React.useMemo(() => {
+    if (phase === "choose") return [
+      { role: "bot", text: "Ei! Eu sou o Caderno. 📚 Quer provar que aprendeu com aqueles errinhos?" },
+      { role: "bot", text: chosenCycle
+        ? "Encontrei seu ciclo! Clique em aceitar para começarmos a nossa revanche."
+        : "Escolha um ciclo concluído com erros. Eu preparo um desafio sob medida." },
+    ];
+    if (phase === "prepare") return [
+      { role: "bot", text: "Chegamos ao erro " + activeNumber + " de " + session.total_errors + "." },
+      { role: "bot", text: "Vou criar duas afirmações novas sobre o raciocínio que te confundiu. Meu colega Gemini vai conferir os fundamentos antes de você responder. Topa?" },
+    ];
+    if (phase === "question") return [
+      ...(session.current?.previous_feedback ? [{ role: "bot", text: "Na primeira tentativa: " + session.current.previous_feedback }] : []),
+      { role: "bot", text: session.current?.attempt_number === 2
+        ? "Ainda temos uma chance. Essa é a segunda afirmação. 😏"
+        : "Preparado? Leia com atenção. Verdadeiro ou falso?" },
+      { role: "bot", title: "Afirmação " + (session.current?.attempt_number || 1),
+        text: session.current.statement || "" },
+    ];
+    if (phase === "feedback") return [
+      { role: "bot", text: "Sua resposta foi registrada." },
+      { role: "user", text: lastAnswer ? "Verdadeiro" : "Falso" },
+      { role: "bot", title: result.correct ? "Mandou bem! ✅"
+        : result.advanced ? "Essa escapou. 📘" : "Quase! Ainda há outra chance.",
+        text: result.correct
+          ? "Você superou esse raciocínio. Gostei de ver!"
+          : result.advanced
+            ? "Dessa vez não deu para superar, mas a revisão continua disponível."
+            : "Olha o detalhe que pegou você:" },
+      { role: "bot", text: result.feedback || "Revise o fundamento antes de continuar." },
+    ];
+    return [
+      { role: "bot", text: session?.perfect
+        ? "Caramba! Você venceu todas as revanches! 🏆 Nem eu esperava tanta precisão."
+        : "Terminamos! Você enfrentou os erros de frente. Nada mal! 💪" },
+      { role: "bot", text: session.mastered_count + " de " + session.total_errors
+        + " erro(s) superado(s). " + (session.perfect ? "Conquista: Revanche perfeita — 100%!"
+        : "Os assuntos ainda pendentes podem ser revisados no estudo original.") },
+      { role: "bot", text: "E pode ficar tranquilo: o resultado do ciclo original não mudou." },
+    ];
+  }, [phase, chosenCycle, activeNumber, session, result, lastAnswer]);
+
   return (
-    <section className="revenge-page">
+    <section className="revenge-page revenge-conversation">
       <div className="revenge-head">
-        <div>
-          <span className="eyebrow">MODO REVANCHE · V64</span>
-          <h1>Uma segunda chance para aprender</h1>
-          <p>Enfrente o raciocínio que levou ao erro, sem alterar a nota do ciclo original.</p>
-        </div>
+        <div><span className="eyebrow">MODO REVANCHE</span>
+          <h1>Um duelo de conhecimentos</h1>
+          <p>Duas afirmações por erro. Uma conversa, sem mexer na nota original.</p></div>
         <label className="revenge-toggle">
-          <input type="checkbox" checked={showMascot} onChange={changeMascot} /> Mascote ativado
+          <input type="checkbox" checked={showMascot} onChange={toggleMascot} /> Mostrar mascote
         </label>
       </div>
-      {showMascot && (
-        <div className="revenge-mascot" aria-live="polite">
-          <span className="revenge-mascot-face" aria-hidden="true">
-            📘
-          </span>
-          <p>
-            {busy ? (
-              <>
-                <span className="revenge-typing">
-                  O Caderno está pensando<span>…</span>
-                </span>
-              </>
-            ) : session?.state === "completed" ? (
-              session.perfect ? (
-                "Essa foi impecável! Eu nem consegui te pegar. 😎"
-              ) : (
-                "A revanche acabou. O importante é saber por que errou."
-              )
-            ) : result?.correct ? (
-              "Boa! Agora você pegou a ideia."
-            ) : result?.advanced ? (
-              "Não foi dessa vez, mas o assunto já ficou mais claro."
-            ) : session ? (
-              "Eu trouxe outra forma de olhar para o seu erro. Vamos ver se você aprendeu?"
-            ) : (
-              "Errar faz parte. Continuar errando sem revisar é que não vale, hein? 😏"
-            )}
-          </p>
-        </div>
-      )}
-      {message && (
-        <p className="form-message" role="alert">
-          {message}
-        </p>
-      )}
-      {!session && (
-        <div className="card revenge-picker">
-          <h2>Escolha um ciclo concluído</h2>
-          <p>Os ciclos com erros ficam disponíveis para uma Revanche, inclusive pelo histórico.</p>
-          {cycles.length === 0 ? (
-            <p>Não há ciclos concluídos com erros neste caderno.</p>
-          ) : (
-            <div className="revenge-cycle-list">
-              {cycles.map((cycle, index) => {
-                const saved = history.find((x) => x.cycle_id === cycle.id);
-                const wrong = cycle.progress?.filter((x) => x === "wrong").length || 0;
-                return (
-                  <button
-                    type="button"
-                    className={"revenge-cycle" + (cycleId === cycle.id ? " active" : "")}
-                    key={cycle.id}
-                    onClick={() => {
-                      setCycleId(cycle.id);
-                      setResult(null);
-                      setMessage("");
-                      setSession(null);
-                    }}
-                  >
-                    <span>
-                      <b>{cycle.concurso || "Ciclo de estudos"}</b>
-                      <small>
-                        {new Date(cycle.completed_at).toLocaleDateString("pt-BR")} · {wrong} erro(s)
-                        · {cycle.banca || "Questões"}
-                      </small>
-                    </span>
-                    <span>
-                      {saved?.state === "completed" ? "Concluída" : saved ? "Continuar" : "Iniciar"}{" "}
-                      ›
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {cycleId && (
-            <button disabled={busy} onClick={() => doAction(archived ? "state" : "start")}>
-              {busy ? "Preparando…" : archived ? "Abrir Revanche" : "Começar Revanche"}
-            </button>
-          )}
-        </div>
-      )}
       {session && (
-        <div className="card revenge-card">
-          <div className="revenge-status">
-            <span>
-              Questões superadas: {session.mastered_count} de {session.total_errors}
-            </span>
-            <span>
-              {session.state === "completed"
-                ? "Concluída"
-                : session.completed_errors + 1 + " de " + session.total_errors}
-            </span>
-          </div>
-          <div className="revenge-progress">
-            <span
-              style={{ width: (session.completed_errors / session.total_errors) * 100 + "%" }}
-            />
-          </div>
-          {session.state === "completed" ? (
-            <>
-              <h2>{session.perfect ? "Revanche perfeita! 🏆" : "Revanche concluída"}</h2>
-              <p>
-                {session.mastered_count} de {session.total_errors} erro(s) superado(s).{" "}
-                {session.perfect
-                  ? "Conquista: 100% na Revanche."
-                  : "Os temas que não foram superados continuam disponíveis para revisão no estudo original."}
-              </p>
-              <p>
-                <small>
-                  O aproveitamento e a pontuação do ciclo original não foram modificados.
-                </small>
-              </p>
-              <div className="revenge-actions">
-                <button
-                  onClick={() => {
-                    setSession(null);
-                    setCycleId("");
-                    setResult(null);
-                  }}
-                >
-                  Ver histórico de ciclos
-                </button>
-                <button className="light" onClick={onBack}>
-                  Voltar aos estudos
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <span className="eyebrow">
-                VERDADEIRO OU FALSO · {session.current?.attempt_number || 1}ª AFIRMAÇÃO
-              </span>
-              {!session.current?.ready ? (
-                <>
-                  <h2>Preparar o desafio</h2>
-                  <p>
-                    O Groq cria duas afirmações sobre o erro desta questão; o Gemini confere a
-                    consistência jurídica antes de você responder.
-                  </p>
-                  <button onClick={() => doAction("generate")} disabled={busy}>
-                    {busy ? "Gerando e verificando…" : "Gerar duas afirmações"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <h2>{session.current.statement}</h2>
-                  <div className="revenge-options">
-                    <button
-                      disabled={busy || !!result}
-                      className={selected === true ? "selected" : ""}
-                      onClick={() => setSelected(true)}
-                    >
-                      Verdadeiro
-                    </button>
-                    <button
-                      disabled={busy || !!result}
-                      className={selected === false ? "selected" : ""}
-                      onClick={() => setSelected(false)}
-                    >
-                      Falso
-                    </button>
-                  </div>
-                  {!result && (
-                    <button
-                      disabled={busy || selected === null}
-                      onClick={() => doAction("answer", { answer: selected })}
-                    >
-                      {busy ? "Corrigindo…" : "Conferir resposta"}
-                    </button>
-                  )}
-                  {result && (
-                    <div className={"revenge-feedback " + (result.correct ? "correct" : "wrong")}>
-                      <strong>
-                        {result.correct
-                          ? "Você acertou!"
-                          : result.advanced
-                            ? "As duas tentativas terminaram."
-                            : "Essa não foi. Você ainda tem mais uma chance."}
-                      </strong>
-                      <p>{result.feedback}</p>
-                      <button onClick={() => doAction("state")} disabled={busy}>
-                        {busy
-                          ? "Carregando…"
-                          : result.finished
-                            ? "Ver resultado final"
-                            : result.advanced
-                              ? "Próximo erro"
-                              : "Segunda afirmação"}
+        <div className="revenge-chat-progress">
+          <span>{session.completed_errors} de {session.total_errors} erros enfrentados</span>
+          <span>{session.mastered_count} superado(s)</span>
+          <div className="revenge-progress"><span style={{ width: (session.completed_errors / session.total_errors) * 100 + "%" }} /></div>
+        </div>
+      )}
+      <Dialogue messages={messages} phaseKey={phaseKey} busy={busy} mascotEnabled={showMascot}>
+        {phase === "choose" && (
+          <div className="revenge-chat-choices">
+            {cycles.length === 0 ? <p>Você ainda não tem um ciclo concluído com erros neste caderno.</p>
+              : <>
+                <p>Escolha seu desafio:</p>
+                <div className="revenge-cycle-list">
+                  {cycles.map((cycle) => {
+                    const saved = history.find((row) => row.cycle_id === cycle.id);
+                    return (
+                      <button type="button" key={cycle.id}
+                        className={"revenge-cycle" + (cycleId === cycle.id ? " active" : "")}
+                        onClick={() => { setCycleId(cycle.id); setResult(null); setMessage(""); }}>
+                        <span><b>{cycle.concurso || "Ciclo de estudos"}</b>
+                          <small>{new Date(cycle.completed_at).toLocaleDateString("pt-BR")} ·
+                            {" "}{cycle.progress?.filter((x) => x === "wrong").length} erros
+                          </small></span>
+                        <span>{saved?.state === "completed" ? "Concluída" : saved ? "Continuar" : "Escolher"} ›</span>
                       </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
+                    );
+                  })}
+                </div>
+                {cycleId && (
+                  <button className="revenge-primary" disabled={busy}
+                    onClick={() => doAction(savedSession ? "state" : "start")}>
+                    {savedSession ? "Continuar conversa" : "Aceitar desafio"}
+                  </button>
+                )}
+              </>}
+          </div>
+        )}
+        {phase === "prepare" && (
+          <button className="revenge-primary" onClick={() => doAction("generate")}>
+            {session.current?.attempt_number > 1 ? "Continuar desafio" : "Aceitar desafio"}
+          </button>
+        )}
+        {phase === "question" && (
+          <div className="revenge-quick-replies" role="group" aria-label="Escolha verdadeiro ou falso">
+            <button onClick={() => doAction("answer", { answer: true })}>✓ Verdadeiro</button>
+            <button onClick={() => doAction("answer", { answer: false })}>✕ Falso</button>
+          </div>
+        )}
+        {phase === "feedback" && (
+          <button className="revenge-primary" onClick={() => doAction("state")}>
+            {result.finished ? "Ver resultado final" : result.advanced ? "Próximo erro" : "Tentar novamente"}
+          </button>
+        )}
+        {phase === "completed" && (
+          <div className="revenge-actions">
+            <button onClick={() => { setSession(null); setCycleId(""); setResult(null); }}>Escolher outro ciclo</button>
+            <button className="light" onClick={onBack}>Voltar aos estudos</button>
+          </div>
+        )}
+      </Dialogue>
+      {message && (
+        <div className="revenge-error" role="alert">
+          <strong>O Caderno teve um contratempo.</strong>
+          <p>{message}</p>
+          <p>O progresso já registrado está preservado. Você pode tentar novamente.</p>
+          {phase === "prepare" && <button onClick={() => doAction("generate")}>Tentar gerar novamente</button>}
+          <button className="light" onClick={() => setMessage("")}>Fechar</button>
         </div>
       )}
       <p className="revenge-disclaimer">
-        As afirmações passam por verificação de IA, que pode cometer erros. Confira os fundamentos
-        jurídicos em caso de dúvida.
+        As afirmações são verificadas por IA, mas podem conter erros. Em caso de dúvida,
+        confira o fundamento jurídico antes de incorporar o conteúdo aos estudos.
       </p>
     </section>
   );

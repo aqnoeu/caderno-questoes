@@ -2,6 +2,15 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## v59 — 2026-11-07
+
+- Segunda IA gratuita (Groq) nas tarefas auxiliares do desafio diário: gerar afirmações a partir das questões cadastradas e sugerir/montar as questões do dia. A Groq responde primeiro; se falhar, atingir o limite ou devolver algo inválido, o Gemini assume automaticamente.
+- Continuam somente no Gemini, sem troca de modelo: correção de redações, as três etapas do Modelo novo (inclusive a análise de cada alternativa), a classificação das questões importadas de PDF e a leitura do espelho das discursivas.
+- A atribuição por função fica em segredos do Supabase: `GROQ_API_KEY` (chave), `GROQ_MODEL` (padrão `llama-3.3-70b-versatile`) e `AI_ROTA_DESAFIO` (`auto` padrão, `groq` só Groq para testar, `gemini` só Gemini). Sem a chave da Groq, tudo segue no Gemini como antes.
+- Cada afirmação gerada guarda qual IA a produziu (coluna `ai_model`) e a ficha mostra "gerada por Groq/Gemini"; as já existentes foram marcadas como Gemini. A mensagem ao sugerir o desafio também informa a IA usada.
+- Para a Groq a lista de candidatos da sugestão é menor (limite de texto por minuto do plano gratuito); o Gemini recebe a lista completa.
+- Migração `20261108_v59_registro_ia_usada.sql`; funções `generate-challenge-statements` e `compose-daily-challenge` atualizadas. Backup: branch `backup/2026-11-07-antes-v59`.
+
 ## v58 — 2026-11-07
 
 - Banco de afirmações do desafio (aprovadas e em aprovação): linhas padronizadas, com botões do mesmo tamanho e alinhados (em coluna no computador, em 2 colunas no celular).

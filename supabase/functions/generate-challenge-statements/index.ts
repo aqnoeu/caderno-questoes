@@ -19,13 +19,13 @@ function corsFor(request: Request) {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 class GeminiError extends Error { constructor(public status: number, message: string) { super(message); } }
 
-async function askGemini(apiKey: string, prompt: string): Promise<any> {
+async function askGemini(apiKey: string, prompt: string, temperature = 0.2): Promise<any> {
   let status = 500, message = "Erro Gemini";
   for (let attempt = 1; attempt <= 3; attempt++) {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", temperature: 0.2 } }),
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", temperature } }),
     });
     const data = await response.json().catch(() => ({}));
     if (response.ok) {
@@ -42,6 +42,37 @@ async function askGemini(apiKey: string, prompt: string): Promise<any> {
   throw new GeminiError(status >= 400 ? status : 500, "Não foi possível obter a resposta da IA agora.");
 }
 
+// v59: roteamento de IA. Tarefas auxiliares tentam a Groq primeiro e usam o Gemini como segurança.
+// AI_ROTA_DESAFIO: "auto" (padrão: Groq e, se falhar, Gemini) | "groq" (só Groq, para testar) | "gemini" (só Gemini).
+const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "llama-3.3-70b-versatile";
+const AI_ROUTE = (Deno.env.get("AI_ROTA_DESAFIO") || "auto").toLowerCase();
+
+async function askGroq(apiKey: string, prompt: string, temperature: number): Promise<any> {
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+    body: JSON.stringify({ model: GROQ_MODEL, temperature, response_format: { type: "json_object" }, messages: [{ role: "system", content: "Responda sempre em português do Brasil e somente com um objeto JSON válido." }, { role: "user", content: prompt }] }),
+    signal: AbortSignal.timeout(45000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`Groq ${response.status}: ${String(data?.error?.message || "").slice(0, 160)}`);
+  const text = String(data?.choices?.[0]?.message?.content || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  return JSON.parse(text);
+}
+
+async function askAI(prompt: string, temperature: number, groqPrompt?: string): Promise<{ data: any; provider: string }> {
+  const groqKey = Deno.env.get("GROQ_API_KEY"), geminiKey = Deno.env.get("GEMINI_API_KEY");
+  if (AI_ROUTE !== "gemini" && groqKey) {
+    try { return { data: await askGroq(groqKey, groqPrompt || prompt, temperature), provider: `groq:${GROQ_MODEL}` }; }
+    catch (error) {
+      console.warn("Groq falhou:", error instanceof Error ? error.message : error);
+      if (AI_ROUTE === "groq" || !geminiKey) throw new GeminiError(502, "A IA reserva (Groq) não respondeu agora. Tente novamente em instantes.");
+    }
+  }
+  if (!geminiKey) throw new GeminiError(500, "Nenhuma chave de IA está configurada.");
+  return { data: await askGemini(geminiKey, prompt, temperature), provider: `gemini:${MODEL}` };
+}
+
 const altList = (value: unknown): { letter: string; text: string }[] => Array.isArray(value)
   ? value.map((item: any) => ({ letter: String(item?.letter || "").toUpperCase(), text: String(item?.text || "").trim() })).filter((item) => item.letter && item.text)
   : Object.entries((value || {}) as Record<string, unknown>).map(([letter, text]) => ({ letter: letter.toUpperCase(), text: String(text || "").trim() })).filter((item) => item.text);
@@ -52,8 +83,8 @@ Deno.serve(async (request) => {
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
   if (request.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const apiKey = Deno.env.get("GEMINI_API_KEY"), url = Deno.env.get("SUPABASE_URL"), serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!apiKey || !url || !serviceKey) return json({ error: "A função não possui as credenciais necessárias." }, 500);
+    const url = Deno.env.get("SUPABASE_URL"), serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !serviceKey) return json({ error: "A função não possui as credenciais necessárias." }, 500);
     const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
     const { data: authData, error: authError } = await admin.auth.getUser((request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, ""));
     if (authError || !authData.user) return json({ error: "Sessão inválida." }, 401);
@@ -111,7 +142,7 @@ ${JSON.stringify(payload)}
 
 Formato: {"items":[{"index":0,"statements":[{"correct_answer":true,"statement":"...","explanation":"...","legal_basis":"","source_option":"B","confidence":0.0}]}]}`;
 
-    const result = await askGemini(apiKey, prompt);
+    const { data: result, provider } = await askAI(prompt, 0.2);
     const rows: any[] = [];
     for (const entry of Array.isArray(result.items) ? result.items : []) {
       const source = usable[Number(entry?.index)];
@@ -132,7 +163,7 @@ Formato: {"items":[{"index":0,"statements":[{"correct_answer":true,"statement":"
           active: false, administratively_available: false, review_status: "draft",
           source_kind: kind, source_question_id: source.id, source_option: option,
           ai_generated: true, ai_confidence: Math.max(0, Math.min(1, Number(stmt?.confidence) || 0)),
-          ai_note: source.hidden ? "A questão de origem está oculta dos estudos." : null,
+          ai_note: source.hidden ? "A questão de origem está oculta dos estudos." : null, ai_model: provider,
         });
       }
     }
@@ -157,7 +188,7 @@ Formato: {"items":[{"index":0,"statements":[{"correct_answer":true,"statement":"
     const covered = new Set(rows.map((row) => row.source_question_id));
     for (const item of usable) if (!covered.has(item.id)) skipped.push({ id: item.id, reason: "A IA não conseguiu adaptar com fidelidade." });
     // Origem já registrada por duplicidade não deve ser sorteada de novo na mesma rodada.
-    return json({ created, skipped, considered: usable.length });
+    return json({ created, skipped, considered: usable.length, ai_model: provider });
   } catch (error) {
     if (error instanceof GeminiError) return json({ error: error.message }, error.status);
     return json({ error: error instanceof Error ? error.message : "Erro inesperado" }, 500);

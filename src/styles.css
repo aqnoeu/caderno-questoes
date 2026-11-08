@@ -918,3 +918,34 @@ button.annulled {
 .revenge-message-user .revenge-sender{color:#e4edff}
 .revenge-bubble span strong{font-size:inherit;font-weight:700;color:#2258a4}
 .revenge-message-user .revenge-bubble span strong{color:inherit}
+
+/* v65 — Central de notificações sem mudar o layout principal */
+.header-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;min-width:0}
+.home-shortcut.review>span{overflow:hidden}
+.home-shortcut.review>span img{width:47px;height:47px;display:block;object-fit:contain}
+.notification-center{position:relative;z-index:55;flex:none}
+.notification-bell{position:relative;display:grid;place-items:center;width:48px;height:48px;border:1px solid #dce5f2;border-radius:14px;background:#fff;color:#1e3e69;cursor:pointer}
+.notification-bell:hover,.notification-bell[aria-expanded=true]{background:#eaf2ff;border-color:#abc7ea}
+.notification-count{position:absolute;top:2px;right:2px;min-width:19px;height:19px;padding:1px 4px;border-radius:12px;background:#e54d52;color:white;font-size:11px;font-weight:700;line-height:17px;text-align:center}
+.notification-panel{position:absolute;z-index:100;right:0;top:calc(100% + 10px);width:min(380px,calc(100vw - 28px));max-height:min(72vh,600px);display:flex;flex-direction:column;border-radius:17px;background:#fff;border:1px solid #dce6f2;box-shadow:0 18px 48px #14335430;overflow:hidden;text-align:left;color:#213655}
+.notification-panel-top{display:flex;justify-content:space-between;align-items:center;padding:17px 18px 8px;font-size:17px}
+.notification-close{border:0;background:transparent;color:#61738b;font-size:25px;line-height:1;padding:3px 7px;cursor:pointer}
+.notification-tools{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:3px 18px 12px;border-bottom:1px solid #edf1f7}
+.notification-tools button{border:0;background:transparent;color:#2765b2;font-size:12px;padding:4px 0;cursor:pointer}
+.notification-list{overflow:auto;min-height:90px;overscroll-behavior:contain}
+.notification-item{display:flex;align-items:flex-start;gap:11px;width:100%;padding:14px 17px;background:#fff;border:0;border-bottom:1px solid #eef2f7;color:inherit;text-align:left;cursor:pointer}
+.notification-item.unread{background:#f1f6ff}
+.notification-item:hover{background:#eaf2ff}
+.notification-emoji{width:27px;flex:none;font-size:20px;line-height:1.4}
+.notification-copy{display:grid;gap:5px;flex:1;min-width:0;font-size:13px;line-height:1.45}
+.notification-copy strong{font-size:13px;color:#19365b;font-weight:700}
+.notification-copy>span{color:#53657d}
+.notification-copy small{font-size:11px;color:#7c8998}
+.notification-dot{display:block;width:8px;height:8px;background:#2275e5;border-radius:50%;margin-top:5px;flex:none}
+.notification-empty{padding:24px 20px;text-align:center;color:#647690;font-size:13px}
+.notification-error{margin:0;padding:10px 18px;color:#9b443b;background:#fff5f4;font-size:12px}
+.notification-options{display:grid;gap:0;overflow:auto}
+.notification-options label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 19px;border-bottom:1px solid #eef2f7;font-size:13px;color:#263c57}
+.notification-options input{width:18px;height:18px;accent-color:#2364c6}
+.notification-options small{padding:14px 19px;color:#667892;line-height:1.55;font-size:12px}
+@media(max-width:600px){.header-actions{gap:6px}.notification-bell{width:41px;height:43px}.notification-panel{right:-3px;max-height:70vh}.home-shortcut.review>span img{width:47px;height:47px}}

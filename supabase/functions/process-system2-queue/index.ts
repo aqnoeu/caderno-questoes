@@ -27,6 +27,27 @@ async function askGemini(apiKey: string, prompt: string) {
   throw new Error(message);
 }
 
+const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
+async function askGroq(prompt: string) {
+  const key = Deno.env.get("GROQ_API_KEY");
+  if (!key) throw new Error("GROQ_API_KEY não configurada.");
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model:GROQ_MODEL, messages:[{ role:"system", content:"Responda exclusivamente em JSON válido. Não invente fundamentos jurídicos." },{ role:"user",content:prompt }], response_format:{ type:"json_object" }, temperature:0.08 }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error?.message || `Groq indisponível (${response.status}).`);
+  const output = String(payload?.choices?.[0]?.message?.content || "{}").trim().replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/,"");
+  return JSON.parse(output);
+}
+async function askProvider(provider: string, prompt: string) {
+  if (provider === "groq") return askGroq(prompt);
+  const key = Deno.env.get("GEMINI_API_KEY");
+  if (!key) throw new Error("GEMINI_API_KEY não configurada.");
+  return askGemini(key, prompt);
+}
+
 Deno.serve(async (request) => {
   const cors = corsFor(request);
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -51,25 +72,25 @@ Deno.serve(async (request) => {
     if (!claimed?.claimed) return json(claimed || { claimed:false, reason:"Nenhuma questão disponível." });
     const { data: source, error: sourceError } = await admin.from("questions_v2").select("id, question_number, statement, alternatives, answer_key_option, ai_stage, analysis_steps, discipline, subjects, subtopics, legal_concepts, difficulty, legal_basis, central_rule, option_error_analysis, correct_answer_explanation, ai_confidence, ai_result, import:question_imports(concurso, edicao, ano, banca, cargo)").eq("id", claimed.question_id).single();
     if (sourceError || !source) throw new Error("A questão selecionada não foi encontrada.");
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!apiKey) throw new Error("A chave GEMINI_API_KEY não foi configurada.");
+    const { data: providers } = await admin.from("ai_provider_settings").select("first_pass_provider,reasoning_provider").eq("id",true).single();
     const question = { number:source.question_number, statement:source.statement, alternatives:source.alternatives, correct_option:source.answer_key_option, metadata:source.import || {} };
     const stage = Number(source.ai_stage || 0) + 1;
-    let patch: Record<string, unknown> = {}, summary: Record<string, unknown> = { stage };
+    const providerForStage = stage === 1 ? (providers?.first_pass_provider || "groq") : (providers?.reasoning_provider || "gemini");
+    let patch: Record<string, unknown> = {}, summary: Record<string, unknown> = { stage, provider:providerForStage };
     if (stage === 1) {
-      const result = await askGemini(apiKey, `Você é a primeira etapa de análise de uma questão objetiva jurídica brasileira. Preserve o enunciado e não invente jurisprudência, lei ou fato. Identifique a alternativa correta usando o gabarito informado. Esta etapa NÃO diagnostica alternativas erradas. Retorne APENAS JSON válido.\n\nQUESTÃO:${JSON.stringify(question)}\n\nFormato: {"discipline":"string","subjects":["tema"],"subtopics":["subtema"],"legal_concepts":["conceito"],"difficulty":"facil|media|dificil","central_rule":"resumo objetivo da regra que torna a alternativa correta","legal_basis":"fundamentos legais seguros e pertinentes","correct_answer_summary":"explicação curta e direta da alternativa correta","confidence":0.0}`);
+      const result = await askProvider(providerForStage, `Você é a primeira etapa de análise de uma questão objetiva jurídica brasileira. Preserve o enunciado e não invente jurisprudência, lei ou fato. Identifique a alternativa correta usando o gabarito informado. Esta etapa NÃO diagnostica alternativas erradas. Retorne APENAS JSON válido.\n\nQUESTÃO:${JSON.stringify(question)}\n\nFormato: {"discipline":"string","subjects":["tema"],"subtopics":["subtema"],"legal_concepts":["conceito"],"difficulty":"facil|media|dificil","central_rule":"resumo objetivo da regra que torna a alternativa correta","legal_basis":"fundamentos legais seguros e pertinentes","correct_answer_summary":"explicação curta e direta da alternativa correta","confidence":0.0}`);
       const difficultyMap: Record<string, string> = { fácil:"facil", facil:"facil", média:"media", media:"media", difícil:"dificil", dificil:"dificil" };
       const confidence = Math.max(0, Math.min(1, Number(result.confidence || 0)));
       patch = { discipline:String(result.discipline || "").trim() || null, subjects:cleanList(result.subjects), subtopics:cleanList(result.subtopics), legal_concepts:cleanList(result.legal_concepts), difficulty:difficultyMap[String(result.difficulty || "").toLowerCase()] || "media", central_rule:String(result.central_rule || "").trim() || null, legal_basis:String(result.legal_basis || "").trim() || null, correct_answer_explanation:String(result.correct_answer_summary || "").trim() || null, ai_confidence:confidence, ai_stage:1, analysis_steps:{ ...(source.analysis_steps || {}), classification:"complete", wrong_options:"pending", correct_answer:"pending" }, ai_result:{ stage_1:result }, status:"processing_ai", ai_last_error:null };
       summary = { stage, discipline:patch.discipline, confidence };
     } else if (stage === 2) {
-      const result = await askGemini(apiKey, `Você é a segunda etapa de análise pedagógica de uma questão objetiva jurídica. A classificação e a regra central já foram produzidas. Para CADA alternativa, identifique o raciocínio do aluno que a escolheria. Na correta, marque is_correct true e explique por que ela atende à regra. Em cada errada, diferencie erros semelhantes com precisão. Produza um conteúdo-base curto, prático e específico para corrigir apenas aquele erro; não faça texto genérico nem repita a fundamentação geral. Retorne APENAS JSON válido.\n\nQUESTÃO:${JSON.stringify(question)}\n\nETAPA 1:${JSON.stringify({ discipline:source.discipline, subjects:source.subjects, central_rule:source.central_rule, legal_basis:source.legal_basis, correct_answer_summary:source.correct_answer_explanation })}\n\nFormato: {"alternatives":[{"letter":"A","is_correct":false,"mistake_type":"string","wrong_reasoning":"qual é a premissa equivocada","student_feedback":"explicação didática do erro","study_content":"texto curto específico para estudo dirigido"}]}`);
+      const result = await askProvider(providerForStage, `Você é a segunda etapa de análise pedagógica de uma questão objetiva jurídica. A classificação e a regra central já foram produzidas. Para CADA alternativa, identifique o raciocínio do aluno que a escolheria. Na correta, marque is_correct true e explique por que ela atende à regra. Em cada errada, diferencie erros semelhantes com precisão. Produza um conteúdo-base curto, prático e específico para corrigir apenas aquele erro; não faça texto genérico nem repita a fundamentação geral. Retorne APENAS JSON válido.\n\nQUESTÃO:${JSON.stringify(question)}\n\nETAPA 1:${JSON.stringify({ discipline:source.discipline, subjects:source.subjects, central_rule:source.central_rule, legal_basis:source.legal_basis, correct_answer_summary:source.correct_answer_explanation })}\n\nFormato: {"alternatives":[{"letter":"A","is_correct":false,"mistake_type":"string","wrong_reasoning":"qual é a premissa equivocada","student_feedback":"explicação didática do erro","study_content":"texto curto específico para estudo dirigido"}]}`);
       const diagnostics: Record<string, unknown> = {};
       for (const item of result.alternatives || []) if (item?.letter) diagnostics[String(item.letter).toUpperCase()] = { is_correct:Boolean(item.is_correct), mistake_type:String(item.mistake_type || ""), wrong_reasoning:String(item.wrong_reasoning || ""), student_feedback:String(item.student_feedback || ""), study_content:String(item.study_content || "") };
       patch = { option_error_analysis:diagnostics, ai_stage:2, analysis_steps:{ ...(source.analysis_steps || {}), classification:"complete", wrong_options:"complete", correct_answer:"pending" }, ai_result:{ stage_1:source.ai_result?.stage_1 || source.ai_result || {}, stage_2:result }, status:"processing_ai", ai_last_error:null };
       summary = { stage, alternatives:Object.keys(diagnostics).length };
     } else {
-      const result = await askGemini(apiKey, `Você é a terceira e última etapa de análise pedagógica. Revise os dados já produzidos para a questão e escreva uma explicação final clara do gabarito, mostrando o caminho jurídico correto. Não repita o diagnóstico individual das alternativas erradas; ele já existe. Não invente informações. Retorne APENAS JSON válido.\n\nQUESTÃO:${JSON.stringify(question)}\n\nANÁLISE JÁ PRODUZIDA:${JSON.stringify({ central_rule:source.central_rule, legal_basis:source.legal_basis, alternative_diagnostics:source.option_error_analysis })}\n\nFormato: {"correct_answer_explanation":"explicação final da alternativa correta, curta e didática","confidence":0.0}`);
+      const result = await askProvider(providerForStage, `Você é a terceira e última etapa de análise pedagógica. Revise os dados já produzidos para a questão e escreva uma explicação final clara do gabarito, mostrando o caminho jurídico correto. Não repita o diagnóstico individual das alternativas erradas; ele já existe. Não invente informações. Retorne APENAS JSON válido.\n\nQUESTÃO:${JSON.stringify(question)}\n\nANÁLISE JÁ PRODUZIDA:${JSON.stringify({ central_rule:source.central_rule, legal_basis:source.legal_basis, alternative_diagnostics:source.option_error_analysis })}\n\nFormato: {"correct_answer_explanation":"explicação final da alternativa correta, curta e didática","confidence":0.0}`);
       const confidence = Math.max(Number(source.ai_confidence || 0), Math.min(1, Number(result.confidence || 0)));
       const complete = Boolean(source.discipline && cleanList(source.subjects).length && source.central_rule && source.legal_basis && Object.keys(source.option_error_analysis || {}).length >= 2 && String(result.correct_answer_explanation || "").trim());
       const finalStatus = complete && confidence >= .6 ? "approved" : "needs_review";

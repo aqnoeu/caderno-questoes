@@ -549,25 +549,100 @@ function App() {
   );
 }
 
+// v60: Turnstile opera em modo gerenciado/invisível quando configurado.
+// A validação obrigatória acontece no Supabase Auth, nunca apenas no navegador.
+const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || "";
+
+function AuthTurnstile({ onToken, onError, widgetRef }) {
+  const mountRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!turnstileSiteKey) return undefined;
+    let alive = true;
+    let renderedId = null;
+    const render = () => {
+      if (!alive || !mountRef.current || !window.turnstile || renderedId !== null) return;
+      try {
+        renderedId = window.turnstile.render(mountRef.current, {
+          sitekey: turnstileSiteKey,
+          theme: "auto",
+          appearance: "interaction-only",
+          callback: (token) => { if (alive) onToken(token); },
+          "expired-callback": () => { if (alive) onToken(""); },
+          "error-callback": () => { if (alive) { onToken(""); onError("A verificação de segurança falhou. Tente novamente."); } },
+        });
+        widgetRef.current = renderedId;
+      } catch {
+        onError("Não foi possível iniciar a verificação de segurança. Atualize a página.");
+      }
+    };
+    if (window.turnstile) render();
+    else {
+      const src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      let script = document.querySelector('script[data-caderno-turnstile="true"]');
+      if (!script) {
+        script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.defer = true;
+        script.dataset.cadernoTurnstile = "true";
+        document.head.appendChild(script);
+      }
+      script.addEventListener("load", render);
+      const timer = window.setInterval(() => { if (window.turnstile) { window.clearInterval(timer); render(); } }, 250);
+      return () => {
+        alive = false;
+        window.clearInterval(timer);
+        script.removeEventListener("load", render);
+        if (renderedId !== null) { try { window.turnstile?.remove(renderedId); } catch {} }
+        if (widgetRef.current === renderedId) widgetRef.current = null;
+      };
+    }
+    return () => {
+      alive = false;
+      if (renderedId !== null) { try { window.turnstile?.remove(renderedId); } catch {} }
+      if (widgetRef.current === renderedId) widgetRef.current = null;
+    };
+  }, [onToken, onError, widgetRef]);
+  return <div ref={mountRef} aria-label="Verificação de segurança" />;
+}
+
 function Auth() {
   const [email, setEmail] = React.useState(""),
     [password, setPassword] = React.useState(""),
     [msg, setMsg] = React.useState(""),
-    [busy, setBusy] = React.useState(false);
+    [busy, setBusy] = React.useState(false),
+    [captchaToken, setCaptchaToken] = React.useState("");
+  const widgetRef = React.useRef(null);
+  const updateCaptcha = React.useCallback((token) => setCaptchaToken(token), []);
+  const captchaError = React.useCallback((message) => setMsg(message), []);
   async function act(kind) {
+    if (busy) return;
+    if (turnstileSiteKey && !captchaToken) {
+      setMsg("Aguarde a verificação automática de segurança antes de continuar.");
+      return;
+    }
     setBusy(true);
-    const { error } =
-      kind === "login"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
-    setMsg(
-      error
-        ? error.message
-        : kind === "login"
-          ? "Login realizado."
-          : "Cadastro realizado. Confira seu e-mail se a confirmação estiver ativada.",
-    );
-    setBusy(false);
+    try {
+      const options = captchaToken ? { captchaToken } : undefined;
+      const { error } = kind === "login"
+        ? await supabase.auth.signInWithPassword({ email, password, options })
+        : await supabase.auth.signUp({ email, password, options });
+      setMsg(
+        error
+          ? error.message
+          : kind === "login"
+            ? "Login realizado."
+            : "Cadastro realizado. Confira seu e-mail se a confirmação estiver ativada.",
+      );
+    } catch {
+      setMsg("Não foi possível completar a solicitação. Tente novamente.");
+    } finally {
+      setBusy(false);
+      setCaptchaToken("");
+      if (widgetRef.current !== null) {
+        try { window.turnstile?.reset(widgetRef.current); } catch {}
+      }
+    }
   }
   return (
     <div className="auth-page">
@@ -581,6 +656,7 @@ function Auth() {
         <span className="eyebrow">BEM-VINDO</span><h2>Entre na sua conta</h2><p>Continue construindo a sua aprovação.</p>
         <label>E-mail<input type="email" placeholder="voce@email.com" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
         <label>Senha<input type="password" placeholder="Sua senha" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+        {turnstileSiteKey && <AuthTurnstile onToken={updateCaptcha} onError={captchaError} widgetRef={widgetRef} />}
         <button className="auth-submit" disabled={busy} onClick={() => act("login")}>{busy ? "Entrando…" : "Entrar no Caderno →"}</button>
         <div className="auth-signup"><span>Ainda não tem uma conta?</span><button className="link-button" disabled={busy} onClick={() => act("signup")}>Criar conta grátis</button></div>
         {msg && <p className="auth-message">{msg}</p>}

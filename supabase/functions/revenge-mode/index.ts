@@ -395,7 +395,7 @@ Deno.serve(async (request) => {
   } catch (e) {
     const detail = e instanceof Error ? e.message : "Falha inesperada na Revanche.";
     console.error("revenge-mode:", detail);
-    const providerFailure = /^(Groq|Gemini)\b/.test(detail);
+    const providerFailure = /^Groq\b/.test(detail);
     return answer(
       request,
       { error: detail, retryable: providerFailure },

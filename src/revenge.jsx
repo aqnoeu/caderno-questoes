@@ -264,11 +264,12 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
         { role: "bot", text: "Vamos rever seu erro " + activeNumber + " de " + session.total_errors
           + (d.number ? " — questão " + d.number : "") + (d.discipline ? " (" + d.discipline + ")" : "") + "." },
       ];
-      if (d.selected_option) messages.push({ role: "bot", title: "Onde você errou",
-        text: "Você marcou a alternativa " + d.selected_option
-          + (d.selected_text ? ": " + d.selected_text : ".")
-          + (d.correct_option ? "\nA resposta correta era " + d.correct_option
-            + (d.correct_text ? ": " + d.correct_text : ".") : "." : "") });
+      if (d.selected_option) {
+        const marked = "Você marcou a alternativa " + d.selected_option + (d.selected_text ? ": " + d.selected_text : ".");
+        const actual = d.correct_option ? "\\nA resposta correta era " + d.correct_option
+          + (d.correct_text ? ": " + d.correct_text : ".") : "";
+        messages.push({ role: "bot", title: "Onde você errou", text: marked + actual });
+      }
       if (d.mistake_type) messages.push({ role: "bot", title: "O que te confundiu", text: d.mistake_type });
       if (d.wrong_reasoning) messages.push({ role: "bot", title: "A lógica do seu erro", text: d.wrong_reasoning });
       else if (d.student_feedback) messages.push({ role: "bot", title: "Entenda o equívoco", text: d.student_feedback });

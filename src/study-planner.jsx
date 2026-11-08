@@ -32,6 +32,7 @@ export function StudyPlanner({supabase,userId,notebookId,questions}) {
   const [plans,setPlans]=React.useState([]);
   const [tasks,setTasks]=React.useState([]);
   const [answers,setAnswers]=React.useState([]);
+  const [editalTopics,setEditalTopics]=React.useState([]);
   const [selected,setSelected]=React.useState("");
   const [name,setName]=React.useState("Meu planejamento");
   const [examDate,setExamDate]=React.useState("");
@@ -55,6 +56,15 @@ export function StudyPlanner({supabase,userId,notebookId,questions}) {
   },[supabase,userId,notebookId]);
   React.useEffect(()=>{setSelected("");setTasks([]);reload();},[reload]);
   React.useEffect(()=>{
+    let active=true;
+    setEditalTopics([]);
+    supabase.from("provisional_notebook_specs").select("topics").eq("notebook_id",notebookId)
+      .maybeSingle().then(({data})=>{
+        if(active) setEditalTopics(Array.isArray(data?.topics)?data.topics:[]);
+      });
+    return()=>{active=false;};
+  },[supabase,notebookId]);
+  React.useEffect(()=>{
     if(!plans.length){setSelected("");return;}
     setSelected(current=>plans.some(p=>p.id===current)?current:plans[0].id);
   },[plans]);
@@ -69,7 +79,17 @@ export function StudyPlanner({supabase,userId,notebookId,questions}) {
     return()=>{active=false;};
   },[selected,supabase,userId]);
 
-  const ranking=React.useMemo(()=>getDisciplines(questions,answers),[questions,answers]);
+  const ranking=React.useMemo(()=>{
+    const items=getDisciplines(questions,answers);
+    const listed=new Set(items.map(item=>item.name));
+    for(const topic of editalTopics){
+      if(topic.discipline&&!listed.has(topic.discipline)){
+        items.push({name:topic.discipline,total:0,correct:0,questions:0});
+        listed.add(topic.discipline);
+      }
+    }
+    return items;
+  },[questions,answers,editalTopics]);
   const plan=plans.find(p=>p.id===selected);
   const today=dayKey(new Date()),weekStart=dayKey(startOfWeek(new Date())),weekEnd=dayKey(addDays(startOfWeek(new Date()),6));
   const weekTasks=tasks.filter(t=>t.study_date>=weekStart&&t.study_date<=weekEnd);

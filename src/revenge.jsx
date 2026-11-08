@@ -266,7 +266,7 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
       ];
       if (d.selected_option) {
         const marked = "Você marcou a alternativa " + d.selected_option + (d.selected_text ? ": " + d.selected_text : ".");
-        const actual = d.correct_option ? "\\nA resposta correta era " + d.correct_option
+        const actual = d.correct_option ? "\nA resposta correta era " + d.correct_option
           + (d.correct_text ? ": " + d.correct_text : ".") : "";
         messages.push({ role: "bot", title: "Onde você errou", text: marked + actual });
       }

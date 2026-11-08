@@ -123,7 +123,7 @@ async function groq(prompt, purpose = "generation") {
 // Diagnóstico pré-existente do banco: o mascote não deve reinventar o erro.
 async function loadDiagnosis(db, cycle, questionId, userId, notebookId) {
   const { data: q, error: questionError } = await db.from("questions")
-    .select("original_number,statement,alternatives,correct_option,central_rule,legal_basis,correct_answer_explanation,option_error_analysis")
+    .select("original_number,discipline,subject,statement,alternatives,correct_option,central_rule,legal_basis,correct_answer_explanation,option_error_analysis")
     .eq("id", questionId).maybeSingle();
   if (questionError || !q) throw Error("Não foi possível recuperar a explicação da questão.");
   const { data: mistake, error: mistakeError } = await db.from("answers")
@@ -140,7 +140,7 @@ async function loadDiagnosis(db, cycle, questionId, userId, notebookId) {
     return String(found?.text || "").trim();
   };
   return {
-    number:q.original_number||null,selected_option:selected,selected_text:optionText(selected),
+    number:q.original_number||null,discipline:String(q.discipline||"").trim(),subject:String(q.subject||"").trim(),selected_option:selected,selected_text:optionText(selected),
     correct_option:correct,correct_text:optionText(correct),
     mistake_type:String(analysis.mistake_type||"").trim(),
     wrong_reasoning:String(analysis.wrong_reasoning||"").trim(),
@@ -377,7 +377,8 @@ Deno.serve(async (request) => {
         .eq("session_id", session.id)
         .eq("question_id", questionId)
         .single();
-      return answer(request, publicState(session, created));
+      const diagnosis=await loadDiagnosis(db, cycle, questionId, user, notebook);
+      return answer(request, publicState(session, created, diagnosis));
     }
     if (action === "answer") {
       if (!item || item.completed)

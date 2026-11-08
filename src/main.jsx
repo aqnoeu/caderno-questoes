@@ -6,6 +6,7 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { System2Home, System2Cadastro, System2Filter, System2Content, System2Test, resolveNotebookV63 } from "./system2";
 import { AiProviderSettings } from "./ai-settings";
 import { useNotebooks, NotebookWelcome, NotebookSwitcher } from "./notebooks";
+import { RevengeMode } from "./revenge";
 import "./styles.css";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -232,6 +233,7 @@ function AdminSidebar({ adminTab, setAdminTab, openUser }) {
 function App() {
   const [session, setSession] = React.useState(undefined),
     [tab, setTab] = React.useState("inicio"),
+    [revengeCycleId, setRevengeCycleId] = React.useState(""),
     [adminTab, setAdminTab] = React.useState("sistema2"),
     [area, setArea] = React.useState("user"),
     [profile, setProfile] = React.useState(undefined),
@@ -509,6 +511,7 @@ function App() {
     setAdminTab(target);
   }
   function openUser(target = "inicio") { setArea("user"); setTab(target); }
+  function openRevenge(id = "") { setRevengeCycleId(id); setArea("user"); setTab("revanche"); }
   const cadastroContent = (
     <section>
       <div className="steps" aria-label="Etapas do cadastro">
@@ -533,7 +536,7 @@ function App() {
       <header className="app-header">
         <button className="brand" onClick={() => openUser("inicio")}><span className="brand-mark">✓</span><span><b>Caderno de Questões</b><small>Estude. Resolva. Evolua.</small></span></button>
         <details className="profile-menu" onMouseLeave={(event) => event.currentTarget.removeAttribute("open")}><summary><span className="avatar">{(profile?.display_name || profile?.email || session.user.email || "U")[0].toUpperCase()}</span><span className="profile-name">{profile?.display_name || (profile?.email || session.user.email || "").split("@")[0]}</span><span>⌄</span></summary><div><button onClick={() => openUser("perfil")}>Minha conta</button><button onClick={() => openUser("perfil")}>Preferências</button>{isAdmin && <button onClick={() => openAdmin()}>Painel administrativo</button>}<button onClick={() => supabase.auth.signOut()}>Sair</button></div></details>
-        {area === "user" && <nav className="user-nav">{[["inicio", "home", "Início"], ["estudos", "document", "Questões"], ["discursivas", "pen", "Discursivas"], ["desempenho", "bars", "Desempenho"], ["perfil", "settings", "Perfil"]].map(([id, icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><span aria-hidden="true"><LineIcon name={icon} /></span>{label}</button>)}</nav>}
+        {area === "user" && <nav className="user-nav">{[["inicio", "home", "Início"], ["estudos", "document", "Questões"], ["revanche", "cycle", "Revanche"], ["discursivas", "pen", "Discursivas"], ["desempenho", "bars", "Desempenho"], ["perfil", "settings", "Perfil"]].map(([id, icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><span aria-hidden="true"><LineIcon name={icon} /></span>{label}</button>)}</nav>}
       </header>
       {notice && (
         <div className="notice">
@@ -542,8 +545,9 @@ function App() {
         </div>
       )}
       {area === "user" ? <>{!notebooks.notebook ? <NotebookWelcome state={notebooks} /> : <><NotebookSwitcher state={notebooks} />
-        {tab === "inicio" && <UserHome questions={userQuestions} notebookId={notebooks.notebook.id} userId={session.user.id} name={profile?.display_name} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} goPerformance={() => setTab("desempenho")} goChallenge={() => setTab("desafio")} />}
-        <div hidden={tab !== "estudos"}><Study key={notebooks.notebook.id} questions={userQuestions} notebookId={notebooks.notebook.id} supabase={supabase} userId={session.user.id} /></div>
+        {tab === "inicio" && <UserHome questions={userQuestions} notebookId={notebooks.notebook.id} userId={session.user.id} name={profile?.display_name} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} goPerformance={() => setTab("desempenho")} goChallenge={() => setTab("desafio")} goRevenge={() => openRevenge()} />}
+        <div hidden={tab !== "estudos"}><Study key={notebooks.notebook.id} questions={userQuestions} notebookId={notebooks.notebook.id} supabase={supabase} userId={session.user.id} onRevenge={openRevenge} /></div>
+        {tab === "revanche" && <RevengeMode key={notebooks.notebook.id} supabase={supabase} userId={session.user.id} notebookId={notebooks.notebook.id} initialCycleId={revengeCycleId} onBack={() => setTab("estudos")} />}
         {tab === "discursivas" && <EssayStudy key={notebooks.notebook.id} supabase={supabase} userId={session.user.id} notebookId={notebooks.notebook.id} essayIds={notebooks.essayIds} />}
         {tab === "desafio" && <DailyChallenge supabase={supabase} onBack={() => setTab("inicio")} onRanking={() => setTab("desempenho")} />}
         {tab === "desempenho" && <Performance questions={userQuestions} notebookId={notebooks.notebook.id} userId={session.user.id} supabase={supabase} goStudy={() => setTab("estudos")} />}
@@ -740,7 +744,7 @@ function CycleBarChart({ cycles }) {
   if (!data.length) return <div className="chart-empty">Conclua um ciclo para acompanhar sua evolução.</div>;
   return <div className="cycle-bar-chart" aria-label="Aproveitamento nos últimos ciclos">{data.map((item) => <div className="cycle-bar" key={item.label}><b>{item.rate}%</b><i style={{ height: `${Math.max(item.rate, 5)}%` }} /><small>{item.label}</small></div>)}</div>;
 }
-function UserHome({ questions, notebookId, userId, name: profileName, email, supabase, goStudy, goPerformance, goChallenge }) {
+function UserHome({ questions, notebookId, userId, name: profileName, email, supabase, goStudy, goPerformance, goChallenge, goRevenge }) {
   const answers = useAnswerHistory(supabase, userId, notebookId);
   const completedCycles = useCompletedCycles(supabase, userId, notebookId);
   const activeCycle = useActiveCycle(supabase, userId, notebookId);
@@ -757,7 +761,7 @@ function UserHome({ questions, notebookId, userId, name: profileName, email, sup
     <div className="home-hero"><div><h1>{greetingName()}, {name} <span aria-hidden="true">👋</span></h1><p>Vamos continuar de onde você parou?</p></div><button onClick={goStudy}>Continuar estudos <span>→</span></button></div>
     <div className="metric-grid home-metric-grid"><MetricCard label="Questões respondidas" value={metrics.total} icon="document" /><MetricCard label="Taxa de acertos" value={`${metrics.rate}%`} icon="check" tone="good" /><MetricCard label="Ciclos concluídos" value={completedCycles} icon="cycle" /><MetricCard label="Sequência de estudos" value={`${metrics.streak} dia${metrics.streak === 1 ? "" : "s"}`} icon="flame" tone="warm" /></div>
     <div className="home-grid"><section className="card continue-card"><h2>{activeCycle ? "Continuar estudando" : "Inicie um ciclo"}</h2>{activeCycle ? <><div className="continue-subject"><span><LineIcon name="book" size={27} /></span><div><b>{activeCycle.discipline || "Ciclo de estudos"}</b><small>{activeOrigin || "Origem do ciclo"}</small></div></div><p className="continue-cycle">{activeCycle.total_questions} questões · {activeCycle.answer_count || 0} respondida(s)</p><div className="continue-progress"><b>{activeCycle.answer_count || 0} de {activeCycle.total_questions}</b><div><i style={{ width: `${activeProgress}%` }} /></div><span>{activeProgress}%</span></div><button onClick={goStudy}>Continuar ciclo</button></> : <><p className="empty-cycle-copy">Escolha concurso, banca e ano. O ciclo ficará salvo na sua conta e terá 10 questões inéditas.</p><button onClick={goStudy}>Iniciar ciclo</button></>}</section><section className="card performance-card"><div className="performance-heading"><h2>Seu desempenho</h2><button className="link-button" onClick={goPerformance}>Ver detalhes →</button></div><div className="performance-summary"><span>Melhor disciplina <b>{metrics.best?.name || "—"}</b><small>{metrics.best ? `${metrics.best.rate}% de acertos` : "Sem respostas ainda"}</small></span><span className="attention">Atenção <b>{metrics.focus?.name || "—"}</b><small>{metrics.focus ? `${metrics.focus.rate}% de acertos` : "Sem dados ainda"}</small></span><span>Média recente <b>{recentCycleRate}%</b><small>nos últimos ciclos</small></span></div><CycleBarChart cycles={completedHistory} /></section></div>
-    <div className="home-shortcuts"><DailyChallengeShortcut supabase={supabase} onOpen={goChallenge} /><button className="home-shortcut review" onClick={goStudy}><span><LineIcon name="x" size={27} /></span><div><b>Revisar erros</b><small>Pratique o que você ainda precisa reforçar.</small></div><i>›</i></button><button className="home-shortcut difficult" onClick={goStudy}><span><LineIcon name="bars" size={27} /></span><div><b>Questões difíceis</b><small>Desafie-se com questões mais complexas.</small></div><i>›</i></button></div>
+    <div className="home-shortcuts"><DailyChallengeShortcut supabase={supabase} onOpen={goChallenge} /><button className="home-shortcut review" onClick={goRevenge}><span><LineIcon name="x" size={27} /></span><div><b>Modo Revanche</b><small>Enfrente seus erros com duas afirmações inéditas.</small></div><i>›</i></button><button className="home-shortcut difficult" onClick={goStudy}><span><LineIcon name="bars" size={27} /></span><div><b>Questões difíceis</b><small>Desafie-se com questões mais complexas.</small></div><i>›</i></button></div>
     <section className="focus-home"><div><span><LineIcon name="target" size={26} /></span><div><b>Foco recomendado para você</b><p>{focusText}</p><button className="link-button" onClick={goStudy}>Ver recomendações personalizadas →</button></div></div><em>Prioridade sugerida</em></section>
   </section>;
 }
@@ -1337,7 +1341,7 @@ function FormattedQuestionText({ text }) {
     .filter(Boolean);
   return <div className="question-statement">{lines.map((line, index) => <p key={index}>{line}</p>)}</div>;
 }
-function Study({ questions, supabase, userId, notebookId }) {
+function Study({ questions, supabase, userId, notebookId, onRevenge }) {
   const [filters, setFilters] = React.useState({ contest: "", board: "", year: "", discipline: "", subject: "" });
   const [active, setActive] = React.useState(null), [cycle, setCycle] = React.useState([]), [progress, setProgress] = React.useState([]), [pos, setPos] = React.useState(0), [choice, setChoice] = React.useState(""), [checked, setChecked] = React.useState(false), [loading, setLoading] = React.useState(true), [message, setMessage] = React.useState(""), [celebration, setCelebration] = React.useState(false);
   const visible = questions.filter((q) => !q.is_annulled && !q.is_hidden && q.correct_option !== "*");
@@ -1377,7 +1381,7 @@ function Study({ questions, supabase, userId, notebookId }) {
   if (!questions.length) return <section className="card"><p>Cadastre questões para começar.</p></section>;
   if (loading) return <section className="card"><p>Carregando seu ciclo…</p></section>;
   if (!active) return <section className="card cycle-setup"><span className="eyebrow">NOVO CICLO</span><h1>Monte seu ciclo de estudos</h1><p>Escolha a origem da prova. Os filtros são opcionais. O ciclo ficará salvo neste caderno com 10 questões exclusivas.</p><div className="study-filters"><select value={filters.contest} onChange={(e) => setFilters({ contest: e.target.value, board: "", year: "", discipline: "", subject: "" })}><option value="">Todos os concursos</option>{contests.map((x) => <option key={x}>{x}</option>)}</select><select value={filters.board} onChange={(e) => setFilters({ ...filters, board: e.target.value, year: "", discipline: "", subject: "" })}><option value="">Todas as bancas</option>{boards.map((x) => <option key={x}>{x}</option>)}</select><select value={filters.year} onChange={(e) => setFilters({ ...filters, year: e.target.value, discipline: "", subject: "" })}><option value="">Todos os anos</option>{years.map((x) => <option key={x}>{x}</option>)}</select><select value={filters.discipline} onChange={(e) => setFilters({ ...filters, discipline: e.target.value, subject: "" })}><option value="">Todas as disciplinas</option>{disciplines.map((x) => <option key={x}>{x}</option>)}</select><select value={filters.subject} onChange={(e) => setFilters({ ...filters, subject: e.target.value })}><option value="">Todos os assuntos</option>{subjects.map((x) => <option key={x}>{x}</option>)}</select></div>{<p className={candidatePool.length >= 10 ? "availability ok" : "availability no"}>{candidatePool.length >= 10 ? `${candidatePool.length} questões encontradas. Você pode gerar um ciclo de 10.` : `Apenas ${candidatePool.length} questão(ões) encontradas; são necessárias 10.`}</p>}<button onClick={generateCycle}>Gerar ciclo de 10 questões</button>{message && <p className="form-message">{message}</p>}</section>;
-  if (finished) return <section className="card summary"><span className="eyebrow">CICLO ARQUIVADO</span><h1>Ciclo concluído</h1><div className="score"><span className="score-ok">{correctTotal} acerto(s)</span><span className="score-no">{wrongTotal} erro(s)</span><span>{skippedTotal} pulada(s)</span></div><p>{correctTotal === cycle.length ? "Excelente! Você acertou todas as questões deste ciclo." : "Ciclo salvo no seu histórico. Continue praticando."}</p>{focus.length > 0 && <div className="focus"><h3>Áreas para reforçar</h3>{focus.map(([area,count]) => <p key={area}>{area} <small>({count} erro{count > 1 ? "s" : ""})</small></p>)}</div>}<button onClick={() => { setActive(null); setCycle([]); setProgress([]); setMessage(""); }}>Montar novo ciclo</button></section>;
+  if (finished) return <section className="card summary"><span className="eyebrow">CICLO ARQUIVADO</span><h1>Ciclo concluído</h1><div className="score"><span className="score-ok">{correctTotal} acerto(s)</span><span className="score-no">{wrongTotal} erro(s)</span><span>{skippedTotal} pulada(s)</span></div><p>{correctTotal === cycle.length ? "Excelente! Você acertou todas as questões deste ciclo." : "Ciclo salvo no seu histórico. Continue praticando."}</p>{focus.length > 0 && <div className="focus"><h3>Áreas para reforçar</h3>{focus.map(([area,count]) => <p key={area}>{area} <small>({count} erro{count > 1 ? "s" : ""})</small></p>)}</div>}{wrongTotal > 0 && <button className="revenge-invite" onClick={() => onRevenge(active.id)}>⚔ Quero revanche! ({wrongTotal} erro(s))</button>}<button className="light" onClick={() => { setActive(null); setCycle([]); setProgress([]); setMessage(""); }}>Montar novo ciclo</button></section>;
   return <section className="study-dashboard">{celebration && <div className="celebration"><span>★</span><b>Excelente!</b><small>Você acertou uma questão difícil.</small></div>}<div className="card study study-main"><div className="study-cycle-head"><b>{active.concurso} · {active.banca} · {active.ano}</b><span className={`difficulty ${q?.difficulty_current || "media"}`}>▥ Dificuldade: {q?.difficulty_current || "media"}</span><span className="study-position">{pos + 1} de {cycle.length}</span></div><div className="study-progress"><span style={{ width: `${((pos + 1) / cycle.length) * 100}%` }} /></div><FormattedQuestionText text={q?.statement} />{(q?.alternatives || []).map((a) => <button key={a.letter} className={`option ${choice === a.letter ? "chosen" : ""} ${checked && a.letter === q.correct_option ? "correct" : ""} ${checked && choice === a.letter && choice !== q.correct_option ? "wrong" : ""}`} disabled={checked} onClick={() => setChoice(a.letter)}><span className="option-letter">{a.letter}</span><span>{a.text}</span></button>)}{checked && <div className={choice === q.correct_option ? "result ok" : "result no"}><b>{choice === q.correct_option ? "Resposta correta!" : `Resposta incorreta. Gabarito: ${q.correct_option}.`}</b>
 {choice === q.correct_option ? <>
   {q.central_rule && <><h4>Regra central</h4><p>{q.central_rule}</p></>}

@@ -1158,3 +1158,11 @@ body{overflow-x:hidden}
  .guided-session button{min-width:28px;padding:4px}
  .guided-actions{display:grid;grid-template-columns:1fr}
 }
+
+/* v66.1.1 — Rótulos da navegação inferior sem sobreposição */
+@media(max-width:700px){
+ .app-header .user-nav{grid-template-columns:repeat(7,minmax(0,1fr))!important;overflow:hidden!important;gap:0!important}
+ .app-header .user-nav button{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;min-width:0!important;width:100%!important;max-width:none!important;padding:6px 1px!important;overflow:hidden!important;white-space:normal!important}
+ .app-header .user-nav .user-nav-label{display:block;width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:9px;line-height:1.25}
+ .app-header .user-nav button>span:first-child{flex:none}
+}

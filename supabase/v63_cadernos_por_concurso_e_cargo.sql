@@ -48,7 +48,7 @@ begin
  if existing.id is not null then
   return jsonb_build_object('ready',true,'matched',true,'notebook_id',existing.id,'title',existing.title,'identity_key',k,'borrowing',false);
  end if;
- proposed:=case when k='oab' then 'OAB' else concat(btrim(p_cargo),' — ',btrim(p_concurso)) end;
+ proposed:=case when k='oab' then 'OAB' else concat(btrim(p_cargo),' — ',btrim(regexp_replace(regexp_replace(regexp_replace(p_concurso,'\\m(19|20)[0-9]{2}\\M','','g'),'\\m[0-9]{1,3}[ºª]\\M','','g'),'[[:space:]]+',' ','g'))) end;
  return jsonb_build_object('ready',true,'matched',false,'notebook_id',null,'title',proposed,'identity_key',k,'borrowing',coalesce(array_length(p_subjects,1),0)>0);
 end;
 $$;

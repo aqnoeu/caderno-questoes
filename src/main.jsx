@@ -7,6 +7,8 @@ import { System2Home, System2Cadastro, System2Filter, System2Content, System2Tes
 import { AiProviderSettings } from "./ai-settings";
 import { useNotebooks, NotebookWelcome, NotebookSwitcher } from "./notebooks";
 import { RevengeMode } from "./revenge";
+import { NotificationCenter } from "./notifications";
+import { REVANCHE_ICON_PNG } from "./revenge-icon-png";
 import "./styles.css";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -512,6 +514,18 @@ function App() {
   }
   function openUser(target = "inicio") { setArea("user"); setTab(target); }
   function openRevenge(id = "") { setRevengeCycleId(id); setArea("user"); setTab("revanche"); }
+  async function navigateNotification(destination, notebookId, details = {}) {
+    if (notebookId && notebookId !== notebooks.notebook?.id) {
+      const book = notebooks.catalog.find((item) => item.id === notebookId);
+      if (!book || !notebooks.memberships.some((member) => member.notebook_id === notebookId)) {
+        setNotice("Esse caderno não está disponível na sua conta.");
+        return;
+      }
+      await notebooks.open(book);
+    }
+    if (destination === "revanche") openRevenge(details?.cycle_id || "");
+    else openUser(["estudos", "desempenho", "inicio"].includes(destination) ? destination : "inicio");
+  }
   const cadastroContent = (
     <section>
       <div className="steps" aria-label="Etapas do cadastro">
@@ -535,7 +549,7 @@ function App() {
     <main className="app-shell">
       <header className="app-header">
         <button className="brand" onClick={() => openUser("inicio")}><span className="brand-mark">✓</span><span><b>Caderno de Questões</b><small>Estude. Resolva. Evolua.</small></span></button>
-        <details className="profile-menu" onMouseLeave={(event) => event.currentTarget.removeAttribute("open")}><summary><span className="avatar">{(profile?.display_name || profile?.email || session.user.email || "U")[0].toUpperCase()}</span><span className="profile-name">{profile?.display_name || (profile?.email || session.user.email || "").split("@")[0]}</span><span>⌄</span></summary><div><button onClick={() => openUser("perfil")}>Minha conta</button><button onClick={() => openUser("perfil")}>Preferências</button>{isAdmin && <button onClick={() => openAdmin()}>Painel administrativo</button>}<button onClick={() => supabase.auth.signOut()}>Sair</button></div></details>
+        <div className="header-actions"><NotificationCenter key={session.user.id} supabase={supabase} userId={session.user.id} onNavigate={navigateNotification} /><details className="profile-menu" onMouseLeave={(event) => event.currentTarget.removeAttribute("open")}><summary><span className="avatar">{(profile?.display_name || profile?.email || session.user.email || "U")[0].toUpperCase()}</span><span className="profile-name">{profile?.display_name || (profile?.email || session.user.email || "").split("@")[0]}</span><span>⌄</span></summary><div><button onClick={() => openUser("perfil")}>Minha conta</button><button onClick={() => openUser("perfil")}>Preferências</button>{isAdmin && <button onClick={() => openAdmin()}>Painel administrativo</button>}<button onClick={() => supabase.auth.signOut()}>Sair</button></div></details></div>
         {area === "user" && <nav className="user-nav">{[["inicio", "home", "Início"], ["estudos", "document", "Questões"], ["revanche", "cycle", "Revanche"], ["discursivas", "pen", "Discursivas"], ["desempenho", "bars", "Desempenho"], ["perfil", "settings", "Perfil"]].map(([id, icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><span aria-hidden="true"><LineIcon name={icon} /></span>{label}</button>)}</nav>}
       </header>
       {notice && (
@@ -762,7 +776,7 @@ function UserHome({ questions, notebookId, userId, name: profileName, email, sup
     <div className="home-hero"><div><h1>{greetingName()}, {name} <span aria-hidden="true">👋</span></h1><p>Vamos continuar de onde você parou?</p></div><button onClick={goStudy}>Continuar estudos <span>→</span></button></div>
     <div className="metric-grid home-metric-grid"><MetricCard label="Questões respondidas" value={metrics.total} icon="document" /><MetricCard label="Taxa de acertos" value={`${metrics.rate}%`} icon="check" tone="good" /><MetricCard label="Ciclos concluídos" value={completedCycles} icon="cycle" /><MetricCard label="Sequência de estudos" value={`${metrics.streak} dia${metrics.streak === 1 ? "" : "s"}`} icon="flame" tone="warm" /></div>
     <div className="home-grid"><section className="card continue-card"><h2>{activeCycle ? "Continuar estudando" : "Inicie um ciclo"}</h2>{activeCycle ? <><div className="continue-subject"><span><LineIcon name="book" size={27} /></span><div><b>{activeCycle.discipline || "Ciclo de estudos"}</b><small>{activeOrigin || "Origem do ciclo"}</small></div></div><p className="continue-cycle">{activeCycle.total_questions} questões · {activeCycle.answer_count || 0} respondida(s)</p><div className="continue-progress"><b>{activeCycle.answer_count || 0} de {activeCycle.total_questions}</b><div><i style={{ width: `${activeProgress}%` }} /></div><span>{activeProgress}%</span></div><button onClick={goStudy}>Continuar ciclo</button></> : <><p className="empty-cycle-copy">Escolha concurso, banca e ano. O ciclo ficará salvo na sua conta e terá 10 questões inéditas.</p><button onClick={goStudy}>Iniciar ciclo</button></>}</section><section className="card performance-card"><div className="performance-heading"><h2>Seu desempenho</h2><button className="link-button" onClick={goPerformance}>Ver detalhes →</button></div><div className="performance-summary"><span>Melhor disciplina <b>{metrics.best?.name || "—"}</b><small>{metrics.best ? `${metrics.best.rate}% de acertos` : "Sem respostas ainda"}</small></span><span className="attention">Atenção <b>{metrics.focus?.name || "—"}</b><small>{metrics.focus ? `${metrics.focus.rate}% de acertos` : "Sem dados ainda"}</small></span><span>Média recente <b>{recentCycleRate}%</b><small>nos últimos ciclos</small></span></div><CycleBarChart cycles={completedHistory} /></section></div>
-    <div className="home-shortcuts"><DailyChallengeShortcut supabase={supabase} onOpen={goChallenge} /><button className="home-shortcut review" onClick={goRevenge}><span><LineIcon name="swords" size={27} /></span><div><b>Modo Revanche</b><small>Enfrente seus erros com duas afirmações inéditas.</small></div><i>›</i></button><button className="home-shortcut difficult" onClick={goStudy}><span><LineIcon name="bars" size={27} /></span><div><b>Questões difíceis</b><small>Desafie-se com questões mais complexas.</small></div><i>›</i></button></div>
+    <div className="home-shortcuts"><DailyChallengeShortcut supabase={supabase} onOpen={goChallenge} /><button className="home-shortcut review" onClick={goRevenge}><span><img src={REVANCHE_ICON_PNG} width="47" height="47" alt="" aria-hidden="true" /></span><div><b>Modo Revanche</b><small>Enfrente seus erros com duas afirmações inéditas.</small></div><i>›</i></button><button className="home-shortcut difficult" onClick={goStudy}><span><LineIcon name="bars" size={27} /></span><div><b>Questões difíceis</b><small>Desafie-se com questões mais complexas.</small></div><i>›</i></button></div>
     <section className="focus-home"><div><span><LineIcon name="target" size={26} /></span><div><b>Foco recomendado para você</b><p>{focusText}</p><button className="link-button" onClick={goStudy}>Ver recomendações personalizadas →</button></div></div><em>Prioridade sugerida</em></section>
   </section>;
 }

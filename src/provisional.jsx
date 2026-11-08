@@ -51,7 +51,7 @@ async function readEdictPdf(file) {
   } finally { await document.destroy(); }
 }
 
-export function ProvisionalCreator({ supabase, userId, onCreated, onCancel }) {
+export function ProvisionalCreator({ supabase, userId, questions = [], onCreated, onCancel }) {
   const [title,setTitle]=React.useState("");
   const [concurso,setConcurso]=React.useState("");
   const [cargo,setCargo]=React.useState("");
@@ -87,7 +87,23 @@ export function ProvisionalCreator({ supabase, userId, onCreated, onCancel }) {
   }
   function previewMatches() {
     if (!topics.length) return setError("Revise as matérias antes de continuar.");
-    setPreview({count:topics.length, expanded:expand});
+    const matched=new Set();
+    const uncovered=[];
+    for (const topic of topics) {
+      const expected=normalized(topic.discipline);
+      const subject=normalized(topic.subject);
+      const hits=questions.filter(q=>{
+        if(q.is_hidden || q.is_annulled || q.correct_option==="*")return false;
+        if(normalized(q.discipline)!==expected)return false;
+        if(!subject)return true;
+        const parts=String(q.subject||"").split(/[;|·•]/).map(normalized);
+        return parts.some(part=>part===subject || (expand && subject.length>=5 &&
+          (part.startsWith(subject+" ") || subject.startsWith(part+" "))));
+      });
+      hits.forEach(q=>matched.add(q.id));
+      if(!hits.length)uncovered.push([topic.discipline,topic.subject].filter(Boolean).join(" — "));
+    }
+    setPreview({count:topics.length,expanded:expand,matchedCount:matched.size,uncovered});
     setError("");
   }
   async function create(event) {
@@ -131,7 +147,12 @@ export function ProvisionalCreator({ supabase, userId, onCreated, onCancel }) {
       <label className="edital-expand"><input type="checkbox" checked={expand} onChange={e=>{setExpand(e.target.checked);setPreview(null);}}/>
       Incluir subassuntos relacionados dentro da mesma disciplina (busca ampliada)</label>
       <button type="button" className="light" onClick={previewMatches}>Conferir seleção</button>
-      {preview&&<p className="edital-preview">Serão consideradas {preview.count} entradas do edital, em correspondência {expand?"ampliada":"estrita"}. Apenas questões publicadas e compatíveis serão aproveitadas na criação. Matérias sem questões permanecerão listadas no caderno.</p>}
+      {preview&&<div className="edital-preview">
+        <strong>{preview.matchedCount} questões compatíveis identificadas no acervo publicado.</strong>
+        <p>Correspondência {expand?"ampliada":"estrita"} para {preview.count} entradas do edital. Nenhuma questão será duplicada.</p>
+        {preview.uncovered.length>0&&<details><summary>{preview.uncovered.length} matéria(s) sem questões correspondentes</summary>
+          <ul>{preview.uncovered.map((item,i)=><li key={i}>{item}</li>)}</ul></details>}
+      </div>}
       {error&&<p role="alert" className="form-message">{error}</p>}
       <button type="submit" disabled={busy||!preview}>{busy?"Preparando…":"Criar caderno provisório"}</button>
     </form>

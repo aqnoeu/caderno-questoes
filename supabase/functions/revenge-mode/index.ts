@@ -28,45 +28,86 @@ async function groq(prompt) {
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw Error("Groq não configurado.");
   const strict = GROQ_MODEL.startsWith("openai/gpt-oss");
-  const schema = { type:"object", additionalProperties:false, properties:{
-    statements:{ type:"array",items:{type:"object",additionalProperties:false,
-      properties:{ text:{type:"string"},correct:{type:"boolean"},explanation:{type:"string"} },
-      required:["text","correct","explanation"]}},
-    },required:["statements"] };
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      statements: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            text: { type: "string" },
+            correct: { type: "boolean" },
+            explanation: { type: "string" },
+          },
+          required: ["text", "correct", "explanation"],
+        },
+      },
+    },
+    required: ["statements"],
+  };
   let last = "Groq não conseguiu gerar as afirmações.";
-  for (let attempt=0;attempt<2;attempt++) {
-    const structured = strict && attempt===0;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const structured = strict && attempt === 0;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 45000);
     try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions",{
-        method:"POST",signal:controller.signal,
-        headers:{"Content-Type":"application/json",Authorization:"Bearer "+key},
-        body:JSON.stringify({model:GROQ_MODEL,temperature:0.12,
-          ...(strict?{include_reasoning:false}:{}),
-          response_format:structured?{type:"json_schema",json_schema:{name:"revenge_statements",strict:true,schema}}:{type:"json_object"},
-          messages:[{role:"system",content:"Você é um professor de Direito brasileiro. Responda exclusivamente em JSON válido, sem inventar normas."},
-            {role:"user",content:prompt}]}),
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          temperature: 0.12,
+          ...(strict ? { include_reasoning: false } : {}),
+          response_format: structured
+            ? {
+                type: "json_schema",
+                json_schema: { name: "revenge_statements", strict: true, schema },
+              }
+            : { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content:
+                "Você é um professor de Direito brasileiro. Responda exclusivamente em JSON válido, sem inventar normas.",
+            },
+            { role: "user", content: prompt },
+          ],
+        }),
       });
-      const payload=await response.json().catch(()=>({}));
-      if(!response.ok){
-        last="Groq ("+response.status+"): "+String(payload.error?.message||"Serviço indisponível.").slice(0,240);
-        if(response.status===400 && structured)continue;
-        if([429,500,502,503,504].includes(response.status) && attempt===0)continue;
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        last =
+          "Groq (" +
+          response.status +
+          "): " +
+          String(payload.error?.message || "Serviço indisponível.").slice(0, 240);
+        if (response.status === 400 && structured) continue;
+        if ([429, 500, 502, 503, 504].includes(response.status) && attempt === 0) continue;
         throw Error(last);
       }
-      try {return json(payload.choices?.[0]?.message?.content);}
-      catch {last="Groq devolveu uma resposta incompleta. Tente gerar novamente."; if(attempt===0)continue;}
-    } catch(error) {
-      if(error instanceof Error && error.message.startsWith("Groq")) {
-        if(attempt===0)continue;
+      try {
+        return json(payload.choices?.[0]?.message?.content);
+      } catch {
+        last = "Groq devolveu uma resposta incompleta. Tente gerar novamente.";
+        if (attempt === 0) continue;
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Groq")) {
+        if (attempt === 0) continue;
         throw error;
       }
-      last=error instanceof Error && error.name==="AbortError"
-        ? "Groq demorou demais para responder. Tente novamente."
-        : "A conexão com o Groq falhou. Tente novamente.";
-      if(attempt===1)throw Error(last);
-    } finally {clearTimeout(timeout);}
+      last =
+        error instanceof Error && error.name === "AbortError"
+          ? "Groq demorou demais para responder. Tente novamente."
+          : "A conexão com o Groq falhou. Tente novamente.";
+      if (attempt === 1) throw Error(last);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
   throw Error(last);
 }
@@ -85,9 +126,18 @@ async function gemini(prompt) {
     },
   );
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw Error("Gemini (" + r.status + "): " + String(j.error?.message || "Serviço indisponível.").slice(0,280));
-  try { return json(j.candidates?.[0]?.content?.parts?.[0]?.text); }
-  catch { throw Error("Gemini respondeu fora do formato JSON esperado. Tente gerar novamente."); }
+  if (!r.ok)
+    throw Error(
+      "Gemini (" +
+        r.status +
+        "): " +
+        String(j.error?.message || "Serviço indisponível.").slice(0, 280),
+    );
+  try {
+    return json(j.candidates?.[0]?.content?.parts?.[0]?.text);
+  } catch {
+    throw Error("Gemini respondeu fora do formato JSON esperado. Tente gerar novamente.");
+  }
 }
 const publicState = (session, item) => {
   const index = session.current_index || 0,
@@ -364,6 +414,10 @@ Deno.serve(async (request) => {
     const detail = e instanceof Error ? e.message : "Falha inesperada na Revanche.";
     console.error("revenge-mode:", detail);
     const providerFailure = /^(Groq|Gemini)\b/.test(detail);
-    return answer(request, { error: detail, retryable: providerFailure }, providerFailure ? 502 : 500);
+    return answer(
+      request,
+      { error: detail, retryable: providerFailure },
+      providerFailure ? 502 : 500,
+    );
   }
 });

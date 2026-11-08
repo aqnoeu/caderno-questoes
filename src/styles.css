@@ -906,3 +906,9 @@ button.annulled {
  .revenge-head .revenge-toggle{font-size:12px}
 }
 @media(prefers-reduced-motion:reduce){.revenge-message{animation:none}.revenge-dots i{animation:none}}
+
+/* Revanche — revisão explicada antes do desafio */
+.revenge-bubble span{white-space:pre-line}
+.revenge-review-actions{display:grid;gap:10px}
+.revenge-review-actions .light{border:1px solid #c8d4e7;border-radius:11px}
+.revenge-review-actions p{margin:0;color:#83513b;font-size:13px}

@@ -51,56 +51,45 @@ function TypingBubble({ showAvatar, mascot }) {
   );
 }
 
-function Dialogue({ messages, phaseKey, busy, mascotEnabled, children }) {
+function Dialogue({ messages, phaseKey, groupKey, busy, mascotEnabled, children }) {
+  const [transcript, setTranscript] = React.useState([]);
   const [shown, setShown] = React.useState(0);
+  const groupRef = React.useRef(null);
   const threadRef = React.useRef(null);
   React.useEffect(() => {
-    setShown(0);
-    const timeouts = messages.map((_, i) =>
-      window.setTimeout(() => setShown(i + 1), 180 + i * 720),
-    );
-    return () => timeouts.forEach(window.clearTimeout);
-  }, [phaseKey, messages.length]);
+    if (groupRef.current !== groupKey) {
+      groupRef.current = groupKey;
+      setTranscript(messages);
+      setShown(0);
+    } else {
+      setTranscript((old) => [...old, ...messages]);
+    }
+  }, [phaseKey, groupKey]);
+  React.useEffect(() => {
+    if (shown >= transcript.length) return undefined;
+    const timer = window.setTimeout(() => setShown((old) => Math.min(old + 1, transcript.length)), shown === 0 ? 180 : 680);
+    return () => window.clearTimeout(timer);
+  }, [shown, transcript.length]);
   React.useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [shown, busy, phaseKey]);
-  const fullyShown = shown >= messages.length;
+  const fullyShown = shown >= transcript.length;
   return (
     <section className="revenge-chat">
       <header className="revenge-chat-header">
-        {mascotEnabled && (
-          <img className="revenge-header-avatar" src="/mascote-caderno.webp" alt="" />
-        )}
-        <div>
-          <strong>Caderno</strong>
-          <small>Seu parceiro de estudos · Revanche</small>
-        </div>
+        {mascotEnabled && <img className="revenge-header-avatar" src="/mascote-caderno.webp" alt="" />}
+        <div><strong>Caderno</strong><small>Seu parceiro de estudos · Revanche</small></div>
         <span className="revenge-online" title="Modo Revanche ativo" />
       </header>
-      <div
-        className="revenge-chat-thread"
-        ref={threadRef}
-        aria-live="polite"
-        aria-relevant="additions text"
-      >
-        {messages.slice(0, shown).map((message, i) => (
-          <ChatBubble
-            key={i + "-" + phaseKey}
-            message={message}
-            mascot="/mascote-caderno.webp"
-            showAvatar={mascotEnabled}
-          />
+      <div className="revenge-chat-thread" ref={threadRef} aria-live="polite" aria-relevant="additions text">
+        {transcript.slice(0, shown).map((message, i) => (
+          <ChatBubble key={groupKey + "-" + i} message={message}
+            mascot="/mascote-caderno.webp" showAvatar={mascotEnabled} />
         ))}
-        {(!fullyShown || busy) && (
-          <TypingBubble showAvatar={mascotEnabled} mascot="/mascote-caderno.webp" />
-        )}
+        {(!fullyShown || busy) && <TypingBubble showAvatar={mascotEnabled} mascot="/mascote-caderno.webp" />}
       </div>
       {fullyShown && !busy && <footer className="revenge-chat-footer">{children}</footer>}
-      {busy && (
-        <footer className="revenge-chat-footer revenge-chat-wait">
-          Preparando sua próxima mensagem…
-        </footer>
-      )}
+      {busy && <footer className="revenge-chat-footer revenge-chat-wait">O Caderno está preparando seu desafio…</footer>}
     </section>
   );
 }
@@ -113,6 +102,12 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
   const [busy, setBusy] = React.useState(false);
   const [result, setResult] = React.useState(null);
   const [lastAnswer, setLastAnswer] = React.useState(null);
+  const [preparedChallenge, setPreparedChallenge] = React.useState(null);
+  const [preparingChallenge, setPreparingChallenge] = React.useState(false);
+  const [prepareError, setPrepareError] = React.useState("");
+  const [prepareRetry, setPrepareRetry] = React.useState(0);
+  const [reviewedQuestionId, setReviewedQuestionId] = React.useState("");
+  const [replay, setReplay] = React.useState(0);
   const [message, setMessage] = React.useState("");
   const [showMascot, setShowMascot] = React.useState(
     () => localStorage.getItem("revenge-mascot-" + userId) !== "off",
@@ -189,6 +184,36 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
     }
   }
 
+  const currentQuestionId = session?.state === "active" ? session.current?.question_id || "" : "";
+  React.useEffect(() => {
+    if (!currentQuestionId || session.current?.ready || !cycleId) {
+      setPreparingChallenge(false);
+      setPreparedChallenge(null);
+      setPrepareError("");
+      return undefined;
+    }
+    let active = true;
+    setPreparedChallenge(null);
+    setPrepareError("");
+    setPreparingChallenge(true);
+    requestRevenge(supabase, notebookId, cycleId, "generate")
+      .then((data) => { if (active) setPreparedChallenge(data); })
+      .catch((error) => {
+        if (active) {
+          console.warn("A preparação da Revanche falhou:", error.message);
+          setPrepareError("Ainda não consegui preparar sua pergunta. Podemos tentar novamente.");
+        }
+      })
+      .finally(() => { if (active) setPreparingChallenge(false); });
+    return () => { active = false; };
+  }, [supabase, notebookId, cycleId, currentQuestionId, session?.current?.ready, prepareRetry]);
+
+  function acceptChallenge() {
+    if (!session?.current?.ready && !preparedChallenge?.current?.ready) return;
+    if (preparedChallenge?.current?.ready) setSession(preparedChallenge);
+    setReviewedQuestionId(currentQuestionId);
+  }
+
   function toggleMascot() {
     setShowMascot((previous) => {
       localStorage.setItem("revenge-mascot-" + userId, previous ? "off" : "on");
@@ -198,21 +223,25 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
   const chosenCycle = cycles.find((x) => x.id === cycleId);
   const savedSession = history.find((x) => x.cycle_id === cycleId);
   const activeNumber = session?.completed_errors + 1 || 1;
+  const needsReview = session?.state === "active" && session.current?.attempt_number === 1 && reviewedQuestionId !== currentQuestionId;
   const phase = !session
     ? "choose"
     : session.state === "completed"
       ? "completed"
       : result
         ? "feedback"
-        : session.current?.ready
-          ? "question"
-          : "prepare";
+        : needsReview
+          ? "prepare"
+          : session.current?.ready
+            ? "question"
+            : "prepare";
   const phaseKey = [
     cycleId || "none",
     phase,
     session?.completed_errors || 0,
     session?.current?.attempt_number || 0,
     result?.attempt || 0,
+    replay,
   ].join(":");
 
   const messages = React.useMemo(() => {
@@ -229,17 +258,27 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
             : "Escolha um ciclo concluído com erros. Eu preparo um desafio sob medida.",
         },
       ];
-    if (phase === "prepare")
-      return [
-        {
-          role: "bot",
-          text: "Chegamos ao erro " + activeNumber + " de " + session.total_errors + ".",
-        },
-        {
-          role: "bot",
-          text: "Vou criar duas afirmações novas sobre o raciocínio que te confundiu. Depois, uma segunda chamada ao Groq confere os fundamentos antes de você responder. Topa?",
-        },
+    if (phase === "prepare") {
+      const d = session.diagnosis || {};
+      const messages = [
+        { role: "bot", text: "Vamos rever seu erro " + activeNumber + " de " + session.total_errors
+          + (d.number ? " — questão " + d.number : "") + (d.discipline ? " (" + d.discipline + ")" : "") + "." },
       ];
+      if (d.selected_option) {
+        const marked = "Você marcou a alternativa " + d.selected_option + (d.selected_text ? ": " + d.selected_text : ".");
+        const actual = d.correct_option ? "\nA resposta correta era " + d.correct_option
+          + (d.correct_text ? ": " + d.correct_text : ".") : "";
+        messages.push({ role: "bot", title: "Onde você errou", text: marked + actual });
+      }
+      if (d.mistake_type) messages.push({ role: "bot", title: "O que te confundiu", text: d.mistake_type });
+      if (d.wrong_reasoning) messages.push({ role: "bot", title: "A lógica do seu erro", text: d.wrong_reasoning });
+      else if (d.student_feedback) messages.push({ role: "bot", title: "Entenda o equívoco", text: d.student_feedback });
+      if (d.central_rule) messages.push({ role: "bot", title: "O que você precisava lembrar", text: d.central_rule });
+      if (d.study_content) messages.push({ role: "bot", title: "Para fixar", text: d.study_content });
+      else if (d.legal_basis) messages.push({ role: "bot", title: "Fundamento", text: d.legal_basis });
+      messages.push({ role: "bot", text: "Agora que vimos o ponto que te confundiu, quero saber se você aprendeu. Aceita uma revanche? 😏" });
+      return messages;
+    }
     if (phase === "question")
       return [
         ...(session.current?.previous_feedback
@@ -260,7 +299,6 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
       ];
     if (phase === "feedback")
       return [
-        { role: "bot", text: "Sua resposta foi registrada." },
         { role: "user", text: lastAnswer ? "Verdadeiro" : "Falso" },
         {
           role: "bot",
@@ -305,7 +343,7 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
         <div>
           <span className="eyebrow">MODO REVANCHE</span>
           <h1>Um duelo de conhecimentos</h1>
-          <p>Duas afirmações por erro. Uma conversa, sem mexer na nota original.</p>
+          <p>Entenda seu erro, tire a dúvida e mostre o que aprendeu.</p>
         </div>
         <label className="revenge-toggle">
           <input type="checkbox" checked={showMascot} onChange={toggleMascot} /> Mostrar mascote
@@ -324,7 +362,7 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
           </div>
         </div>
       )}
-      <Dialogue messages={messages} phaseKey={phaseKey} busy={busy} mascotEnabled={showMascot}>
+      <Dialogue messages={messages} phaseKey={phaseKey} groupKey={(currentQuestionId || cycleId || "choose") + ":" + replay} busy={busy || (phase === "prepare" && preparingChallenge)} mascotEnabled={showMascot}>
         {phase === "choose" && (
           <div className="revenge-chat-choices">
             {cycles.length === 0 ? (
@@ -379,9 +417,15 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
           </div>
         )}
         {phase === "prepare" && (
-          <button className="revenge-primary" onClick={() => doAction("generate")}>
-            {session.current?.attempt_number > 1 ? "Continuar desafio" : "Aceitar desafio"}
-          </button>
+          <div className="revenge-review-actions">
+            {prepareError && <p role="alert">{prepareError}</p>}
+            {prepareError && <button className="light" onClick={() => setPrepareRetry((n) => n + 1)}>Tentar novamente</button>}
+            <button className="revenge-primary" onClick={acceptChallenge}
+              disabled={!session.current?.ready && !preparedChallenge?.current?.ready}>
+              Aceitar desafio ⚔️
+            </button>
+            <button className="light" onClick={() => setReplay((n) => n + 1)}>Rever explicação</button>
+          </div>
         )}
         {phase === "question" && (
           <div

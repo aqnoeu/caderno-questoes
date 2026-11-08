@@ -109,7 +109,56 @@ function parseQuestionsV2(text) {
   }).filter((item) => item.statement || item.alternatives.length);
 }
 
-const emptyMetadata = { concurso: "", edicao: "", ano: "", banca: "", cargo: "", application_date: "" };
+// Preenchimento conservador: só o cabeçalho da prova fornece metadados automáticos.
+// A IA completa campos não identificados, sem substituir edições do administrador.
+function proofMetadata(text) {
+  const header = String(text || "").slice(0, 6000).split(/\bQUEST[ÃA]O\s*0?1\b/i)[0].slice(0, 3800);
+  const simple = header.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const result = {};
+  if (/\b(?:EXAME\s+(?:DE\s+ORDEM\s+)?UNIFICADO|ORDEM\s+DOS\s+ADVOGADOS\s+DO\s+BRASIL|OAB)\b/i.test(simple)) {
+    result.concurso = "Exame de Ordem Unificado";
+    result.sigla = "OAB";
+  } else {
+    const contest = header.match(/(?:^|\n)\s*(CONCURSO\s+P[ÚU]BLICO\s*(?:PARA\s+)?[^\n]{5,130})/i);
+    if (contest && contest[1].trim().length > 21) result.concurso = contest[1].trim();
+    const acronym = header.match(/\bSIGLA\s*[:–-]\s*([A-Z]{2,12})\b/);
+    if (acronym) result.sigla = acronym[1];
+    const cargo = header.match(/\bCARGO\s*[:–-]\s*([^\n]{3,110})/i);
+    if (cargo) result.cargo = cargo[1].trim();
+  }
+  const edition = header.match(/\b(\d{1,3})\s*[º°ªo]?\s*(?:EXAME\s+(?:DE\s+ORDEM\s+)?UNIFICADO|EDI[CÇ][ÃA]O)\b/i) ||
+    header.match(/\b(?:EDI[CÇ][ÃA]O|EXAME)\s*(?:N[°ºo.]?\s*)?(\d{1,3})\b/i);
+  if (edition) result.edicao = String(Number(edition[1]));
+  const board = header.match(/\b(FGV|FCC|CESPE|CEBRASPE|VUNESP|IBFC|IDECAN|CONSULPLAN|AOCP)\b/i);
+  if (board) result.banca = board[1].toUpperCase();
+  else if (/FUNDA[CÇ][ÃA]O\s+GET[ÚU]LIO\s+VARGAS/i.test(header)) result.banca = "FGV";
+  const date = header.match(/\b([0-3]\d)\/([01]\d)\/((?:19|20)\d{2})\b/);
+  if (date) {
+    const day = Number(date[1]), month = Number(date[2]), year = Number(date[3]);
+    const check = new Date(Date.UTC(year, month - 1, day));
+    if (check.getUTCFullYear() === year && check.getUTCMonth() === month - 1 && check.getUTCDate() === day) {
+      result.application_date = date[3] + "-" + date[2] + "-" + date[1];
+      result.ano = String(year);
+    }
+  }
+  if (!result.ano) {
+    const year = header.match(/\b(?:ANO|REALIZA[CÇ][ÃA]O|EDI[CÇ][ÃA]O)\s*[:–-]?\s*((?:19|20)\d{2})\b/i);
+    if (year) result.ano = year[1];
+  }
+  return result;
+}
+function suggestedMetadata(metadata) {
+  const result = {};
+  for (const field of ["concurso", "sigla", "banca", "cargo", "edicao", "ano", "application_date"]) {
+    const value = String(metadata?.[field] ?? "").trim();
+    if (!value) continue;
+    if (field === "ano" && !/^(19|20)\d{2}$/.test(value)) continue;
+    if (field === "application_date" && !/^(19|20)\d{2}-\d{2}-\d{2}$/.test(value)) continue;
+    result[field] = field === "edicao" ? String(Number(value.match(/\d{1,3}/)?.[0] || 0)) : value.slice(0,160);
+  }
+  return result;
+}
+const emptyMetadata = { concurso: "", sigla: "", edicao: "", ano: "", banca: "", cargo: "", application_date: "" };
 
 export async function resolveNotebookV63(supabase, concurso, cargo, subjects = [], incomingCount = 0) {
   const { data, error } = await supabase.rpc("notebook_resolve_v63", {
@@ -308,7 +357,7 @@ export function System2Cadastro({ supabase, onBack }) {
   const patchMeta = (key, value) => setMetadata((current) => ({ ...current, [key]: value }));
   const patchQuestion = (id, patch) => setDrafts((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
   function selectFile(fileToRead) {
-    setFile(fileToRead); setDrafts([]); setInfo(null); setExamType(""); setKeyDocument(null); setAnswerKey(""); setNotice(`Arquivo selecionado: ${fileToRead.name}. Clique em “Extrair questões para revisão”.`);
+    setFile(fileToRead); setMetadata(emptyMetadata); setRoutingSubjects(""); setDrafts([]); setInfo(null); setExamType(""); setKeyDocument(null); setAnswerKey(""); setNotice(`Arquivo selecionado: ${fileToRead.name}. Clique em “Extrair questões para revisão”.`);
   }
   async function inspectFile() {
     if (!file) return setNotice("Selecione um PDF antes de extrair.");
@@ -317,6 +366,8 @@ export function System2Cadastro({ supabase, onBack }) {
       const result = await extractPdfV2(file);
       const parsed = parseQuestionsV2(result.text);
       setInfo(result); setDrafts(parsed);
+      const fromProof = proofMetadata(result.text);
+      setMetadata(previous => ({ ...previous, ...Object.fromEntries(Object.entries(fromProof).filter(([key]) => !previous[key])) }));
       setExamType(detectExamType(result.text) || "");
       if (!parsed.length) { setNotice("Não encontrei questões objetivas com número e alternativas. Verifique se o PDF possui texto selecionável."); return; }
       let cleaned = [...parsed], providerName = "extração local", errorMessage = "";
@@ -324,7 +375,7 @@ export function System2Cadastro({ supabase, onBack }) {
         setNotice(`Groq: revisando estrutura e removendo ruídos do PDF — ${Math.min(start+6,parsed.length)} de ${parsed.length} questões…`);
         const group = parsed.slice(start,start+6);
         const { data, error } = await supabase.functions.invoke("prepare-exam-import", {
-          body: { questions:group.map(({question_number,statement,alternatives})=>({question_number,statement,alternatives})), source_text:result.text.slice(0,6500),metadata }
+          body: { questions:group.map(({question_number,statement,alternatives})=>({question_number,statement,alternatives})), source_text:result.text.slice(0,6500),metadata:{...metadata,...fromProof} }
         });
         if (error || data?.error) { errorMessage = data?.error || error?.message || "Falha na preparação por IA"; break; }
         providerName = data.provider || providerName;
@@ -336,14 +387,12 @@ export function System2Cadastro({ supabase, onBack }) {
             warnings:[...(item.warnings||[]),...(results.get(item.question_number).warnings||[])]
           } : {})
         });
-        if (start === 0 && data.metadata) setMetadata(old=>({
-          ...old,
-          concurso:old.concurso || data.metadata.concurso || "",
-          banca:old.banca || data.metadata.banca || "",
-          ano:old.ano || data.metadata.ano || "",
-          edicao:old.edicao || data.metadata.edicao || "",
-          cargo:old.cargo || data.metadata.cargo || ""
-        }));
+        if (start === 0 && data.metadata) {
+          const suggested = suggestedMetadata(data.metadata);
+          setMetadata(old => ({ ...old, ...Object.fromEntries(
+            Object.entries(suggested).filter(([key]) => !old[key] && !fromProof[key])
+          ) }));
+        }
         if (start === 0 && Array.isArray(data.disciplines)) setRoutingSubjects(old => old || data.disciplines.join("; "));
         setDrafts(cleaned);
       }
@@ -354,7 +403,7 @@ export function System2Cadastro({ supabase, onBack }) {
     } catch (error) { setNotice(`Não foi possível ler o PDF: ${error.message}`); } finally { setBusy(false); }
   }
   function applyEntries(entries, type, edition) {
-    const expectedEdition = String(metadata.edicao || "").match(/\\d+/)?.[0] || "";
+    const expectedEdition = String(metadata.edicao || "").match(/\d+/)?.[0] || "";
     if (edition && expectedEdition && edition !== expectedEdition) {
       setNotice("Atenção: o gabarito é do " + edition + "º Exame, mas a prova está identificada como " + expectedEdition + "º. Confira os PDFs antes de aplicar.");
       return;
@@ -367,7 +416,8 @@ export function System2Cadastro({ supabase, onBack }) {
     }
     setAnswerKey(formatAnswerKey(entries));
     setDrafts(items => items.map(item => map.has(Number(item.question_number)) ?
-      { ...item, correct_option:map.get(Number(item.question_number)) } : item));
+      { ...item, correct_option:map.get(Number(item.question_number)),
+        selected:map.get(Number(item.question_number)) === "*" ? false : (item.correct_option === "*" ? true : item.selected) } : item));
     const cancelled = entries.filter(item => item.answer === "*").length;
     setNotice("Gabarito do Tipo " + type + " organizado e aplicado: " + entries.length + " respostas na ordem correta" +
       (cancelled ? " (" + cancelled + " anulada(s))." : "."));
@@ -408,12 +458,13 @@ export function System2Cadastro({ supabase, onBack }) {
     const missing = drafts.filter(item => item.selected && !parsed.has(Number(item.question_number)));
     if (missing.length) return setNotice("O texto não possui resposta para " + missing.length + " questão(ões) selecionada(s). Nada foi aplicado.");
     setDrafts(items => items.map(item => parsed.has(Number(item.question_number)) ?
-      { ...item, correct_option:parsed.get(Number(item.question_number)) } : item));
+      { ...item, correct_option:parsed.get(Number(item.question_number)),
+        selected:parsed.get(Number(item.question_number)) === "*" ? false : (item.correct_option === "*" ? true : item.selected) } : item));
     setNotice(parsed.size + " resposta(s) numeradas aplicadas às questões extraídas.");
   }
   async function save() {
-    const chosen = drafts.filter((item) => item.selected);
-    if (!chosen.length) return setNotice("Selecione ao menos uma questão para salvar.");
+    const chosen = drafts.filter((item) => item.selected && item.correct_option !== "*");
+    if (!chosen.length) return setNotice("Nenhuma questão válida selecionada para salvar. As anuladas ficam excluídas da importação.");
     if (!metadata.concurso.trim() || !metadata.banca.trim() || !Number(metadata.ano)) return setNotice("Confira concurso, banca e ano antes de salvar.");
     if (chosen.some((item) => !item.statement.trim() || item.alternatives.length < 2)) return setNotice("Revise as questões sem enunciado ou sem alternativas suficientes antes de salvar.");
     if (keyDocument && (!examType || !keyDocument.types[examType])) return setNotice("Confirme o tipo da prova antes de salvar.");
@@ -422,7 +473,7 @@ export function System2Cadastro({ supabase, onBack }) {
     setBusy(true); setNotice("");
     try {
       const destination = await resolveNotebookV63(supabase, metadata.concurso, metadata.cargo, routingSubjects.split(/[;,·]/), chosen.length);
-      const { data: imported, error: importError } = await supabase.from("question_imports").insert({ file_name:file?.name || "prova.pdf", concurso:metadata.concurso.trim(), edicao:metadata.edicao.trim() || null, ano:Number(metadata.ano), banca:metadata.banca.trim(), notebook_id:destination.notebook_id, cargo:metadata.cargo.trim() || null, application_date:metadata.application_date || null, total_extracted:drafts.length, total_selected:chosen.length, import_metadata:{ page_count:info?.pageCount || 0, removed_repeated_layout_lines:info?.removedLayoutLines || 0 } }).select("id").single();
+      const { data: imported, error: importError } = await supabase.from("question_imports").insert({ file_name:file?.name || "prova.pdf", concurso:metadata.concurso.trim(), edicao:metadata.edicao.trim() || null, ano:Number(metadata.ano), banca:metadata.banca.trim(), notebook_id:destination.notebook_id, cargo:metadata.cargo.trim() || null, application_date:metadata.application_date || null, total_extracted:drafts.length, total_selected:chosen.length, import_metadata:{ page_count:info?.pageCount || 0, removed_repeated_layout_lines:info?.removedLayoutLines || 0, sigla:metadata.sigla.trim() || null, tipo_prova:examType || null, anuladas_excluidas:drafts.filter(item=>item.correct_option==="*").map(item=>item.question_number) } }).select("id").single();
       if (importError) throw importError;
       const rows = chosen.map((item) => ({ import_id:imported.id, question_number:item.question_number, statement:item.statement.trim(), alternatives:item.alternatives, answer_key_option:item.correct_option || null, extraction_warnings:item.warnings, status:"pending_ai", source_page_range:null, raw_payload:{ imported_file:file?.name || null } }));
       const { error } = await supabase.from("questions_v2").insert(rows); if (error) throw error;
@@ -430,5 +481,5 @@ export function System2Cadastro({ supabase, onBack }) {
     } catch (error) { setNotice(`Não foi possível salvar: ${error.message}`); } finally { setBusy(false); }
   }
   const noWarnings = drafts.filter((item) => !item.warnings.length).length;
-  return <section className="system2-page"><button className="link-button" onClick={onBack}>← Voltar ao Modelo novo</button><span className="eyebrow">NOVO CADASTRO DE QUESTÕES</span><h1>Importar e revisar prova</h1><p className="system2-lead">Envie o PDF. O Groq sugere os metadados e limpa as questões, enquanto você confere os dados e o gabarito antes de salvar.</p>{notice && <p className="form-message">{notice}</p>}<section className="card system2-form"><h2>Dados da prova</h2><div className="system2-fields"><label>Concurso *<input value={metadata.concurso} onChange={(event) => patchMeta("concurso", event.target.value)} placeholder="Exame de Ordem Unificado" /></label><label>Edição<input value={metadata.edicao} onChange={(event) => patchMeta("edicao", event.target.value)} placeholder="46ª" /></label><label>Ano *<input type="number" value={metadata.ano} onChange={(event) => patchMeta("ano", event.target.value)} /></label><label>Banca *<input value={metadata.banca} onChange={(event) => patchMeta("banca", event.target.value)} placeholder="FGV" /></label><label>Cargo<input value={metadata.cargo} onChange={(event) => patchMeta("cargo", event.target.value)} /></label><label>Data da prova<input type="date" value={metadata.application_date} onChange={(event) => patchMeta("application_date", event.target.value)} /></label><label>Matérias do concurso (para aproveitamento inicial)<input value={routingSubjects} onChange={event=>setRoutingSubjects(event.target.value)} placeholder="Direito Constitucional; Direito Administrativo"/></label></div>{routing && <div className="system2-note"><b>{routing.ready ? (routing.matched ? "Caderno existente identificado" : "Novo caderno sugerido") : "Identificação incompleta"}</b><p>{routing.ready ? routing.title : routing.reason}</p><small>O caderno só será criado ao salvar. Ano, edição e banca identificam a prova, não um novo caderno. O aproveitamento por matéria é realizado apenas na criação.</small></div>}<div className="system2-upload"><b>Enviar prova</b><small>PDF com texto selecionável. O arquivo é processado apenas para revisão; as questões só serão gravadas ao final.</small><label className={`drop ${file ? "file-ready" : ""}`}>{file ? `✓ PDF selecionado: ${file.name}` : "Selecionar PDF"}<input hidden type="file" accept="application/pdf" disabled={busy} onChange={(event) => event.target.files?.[0] && selectFile(event.target.files[0])} /></label>{file && <button type="button" disabled={busy} onClick={inspectFile}>{busy ? "Extraindo questões…" : "Extrair questões para revisão"}</button>}</div></section>{drafts.length > 0 && <><section className="card system2-answer-key"><h2>Gabarito da prova</h2><label className="drop">Selecionar gabarito oficial em PDF<input hidden type="file" accept="application/pdf" onChange={event=>event.target.files?.[0]&&readAnswerKeyPdf(event.target.files[0])}/></label>{keyDocument && <div className="system2-note"><p><b>{keyDocument.typesAvailable.length} tipo(s) identificado(s)</b> · {keyDocument.edition ? keyDocument.edition + "º Exame de Ordem · " : ""}80 respostas por tipo</p><label>Tipo da sua prova *<select value={examType} onChange={event=>{const type=event.target.value;setExamType(type);setAnswerKey("");setDrafts(items=>items.map(item=>({...item,correct_option:""})));}}><option value="">Selecione o tipo</option>{keyDocument.typesAvailable.map(type=><option key={type} value={type}>Prova Tipo {type}</option>)}</select></label>{!examType && <p>Não foi possível identificar o tipo na prova. Escolha-o antes de aplicar.</p>}{examType && keyDocument.types[examType] && <button className="light" onClick={()=>applyEntries(keyDocument.types[examType],examType,keyDocument.edition)}>Organizar e aplicar Tipo {examType}</button>}{keyDocument.issues.length>0 && <small>Alertas de estrutura: {keyDocument.issues.join(" · ")}</small>}</div>}<p>Respostas organizadas por número, por exemplo: <b>1-A, 2-B, 3-D</b>. Use * para anulada.</p><textarea rows="4" value={answerKey} onChange={(event) => {setAnswerKey(event.target.value);setKeyDocument(null);}} placeholder="1-A, 2-B, 3-*..." /><button type="button" className="light" onClick={applyAnswerKey}>Aplicar gabarito às questões</button></section><section className="card system2-summary"><div><span className="eyebrow">IMPORTAÇÃO</span><b>Arquivo: {file?.name}</b><small>{metadata.concurso} · {metadata.edicao && `${metadata.edicao} · `}{metadata.ano} · {metadata.banca}</small></div><div><b>{drafts.length}</b><small>Questões identificadas</small></div><div><b>{noWarnings}</b><small>Sem alertas</small></div><div><b>{drafts.length - noWarnings}</b><small>Revisão recomendada</small></div></section><div className="system2-review-actions"><label><input type="checkbox" checked={drafts.every((item) => item.selected)} onChange={(event) => setDrafts((items) => items.map((item) => ({ ...item, selected:event.target.checked })))} /> Selecionar todas</label><button disabled={busy} onClick={save}>{busy ? "Salvando…" : "Salvar questões"}</button></div><div className="system2-question-list">{drafts.map((item) => <article className="card system2-question-card" key={item.id}><div className="card-top"><label className="card-check"><input type="checkbox" checked={item.selected} onChange={(event) => patchQuestion(item.id, { selected:event.target.checked })} /> Salvar</label><b>Questão {String(item.question_number).padStart(2, "0")}</b>{item.correct_option && <span className="system2-gabarito">Gabarito: {item.correct_option === "*" ? "Anulada" : item.correct_option}</span>}<button className="light compact" onClick={() => setDrafts((items) => items.filter((entry) => entry.id !== item.id))}>Excluir da importação</button></div>{item.warnings.map((warning) => <p className="system2-warning" key={warning}>⚠ {warning}</p>)}<label>Número<input type="number" value={item.question_number} onChange={(event) => patchQuestion(item.id, { question_number:Number(event.target.value) || "" })} /></label><label>Enunciado<textarea rows="6" value={item.statement} onChange={(event) => patchQuestion(item.id, { statement:event.target.value })} /></label><div className="system2-alternatives">{item.alternatives.map((alternative, index) => <label key={`${alternative.letter}-${index}`}><b>{alternative.letter})</b><textarea rows="3" value={alternative.text} onChange={(event) => patchQuestion(item.id, { alternatives:item.alternatives.map((entry, position) => position === index ? { ...entry, text:event.target.value } : entry) })} /></label>)}</div></article>)}</div></>}</section>;
+  return <section className="system2-page"><button className="link-button" onClick={onBack}>← Voltar ao Modelo novo</button><span className="eyebrow">NOVO CADASTRO DE QUESTÕES</span><h1>Importar e revisar prova</h1><p className="system2-lead">Envie o PDF. O Groq sugere os metadados e limpa as questões, enquanto você confere os dados e o gabarito antes de salvar.</p>{notice && <p className="form-message">{notice}</p>}<section className="card system2-form"><h2>Dados da prova</h2><div className="system2-fields"><label>Concurso *<input value={metadata.concurso} onChange={(event) => patchMeta("concurso", event.target.value)} placeholder="Exame de Ordem Unificado" /></label><label>Sigla<input value={metadata.sigla} onChange={event=>patchMeta("sigla",event.target.value)} placeholder="OAB" /></label><label>Edição<input value={metadata.edicao} onChange={(event) => patchMeta("edicao", event.target.value)} placeholder="46ª" /></label><label>Ano *<input type="number" value={metadata.ano} onChange={(event) => patchMeta("ano", event.target.value)} /></label><label>Banca *<input value={metadata.banca} onChange={(event) => patchMeta("banca", event.target.value)} placeholder="FGV" /></label><label>Cargo<input value={metadata.cargo} onChange={(event) => patchMeta("cargo", event.target.value)} /></label><label>Data da prova<input type="date" value={metadata.application_date} onChange={(event) => patchMeta("application_date", event.target.value)} /></label><label>Matérias do concurso (para aproveitamento inicial)<input value={routingSubjects} onChange={event=>setRoutingSubjects(event.target.value)} placeholder="Direito Constitucional; Direito Administrativo"/></label></div>{routing && <div className="system2-note"><b>{routing.ready ? (routing.matched ? "Caderno existente identificado" : "Novo caderno sugerido") : "Identificação incompleta"}</b><p>{routing.ready ? routing.title : routing.reason}</p><small>O caderno só será criado ao salvar. Ano, edição e banca identificam a prova, não um novo caderno. O aproveitamento por matéria é realizado apenas na criação.</small></div>}<div className="system2-upload"><b>Enviar prova</b><small>PDF com texto selecionável. O arquivo é processado apenas para revisão; as questões só serão gravadas ao final.</small><label className={`drop ${file ? "file-ready" : ""}`}>{file ? `✓ PDF selecionado: ${file.name}` : "Selecionar PDF"}<input hidden type="file" accept="application/pdf" disabled={busy} onChange={(event) => event.target.files?.[0] && selectFile(event.target.files[0])} /></label>{file && <button type="button" disabled={busy} onClick={inspectFile}>{busy ? "Extraindo questões…" : "Extrair questões para revisão"}</button>}</div></section>{drafts.length > 0 && <><section className="card system2-answer-key"><h2>Gabarito da prova</h2><label className="drop">Selecionar gabarito oficial em PDF<input hidden type="file" accept="application/pdf" onChange={event=>event.target.files?.[0]&&readAnswerKeyPdf(event.target.files[0])}/></label>{keyDocument && <div className="system2-note"><p><b>{keyDocument.typesAvailable.length} tipo(s) identificado(s)</b> · {keyDocument.edition ? keyDocument.edition + "º Exame de Ordem · " : ""}80 respostas por tipo</p><label>Tipo da sua prova *<select value={examType} onChange={event=>{const type=event.target.value;setExamType(type);setAnswerKey("");setDrafts(items=>items.map(item=>({...item,correct_option:""})));}}><option value="">Selecione o tipo</option>{keyDocument.typesAvailable.map(type=><option key={type} value={type}>Prova Tipo {type}</option>)}</select></label>{!examType && <p>Não foi possível identificar o tipo na prova. Escolha-o antes de aplicar.</p>}{examType && keyDocument.types[examType] && <button className="light" onClick={()=>applyEntries(keyDocument.types[examType],examType,keyDocument.edition)}>Organizar e aplicar Tipo {examType}</button>}{keyDocument.issues.length>0 && <small>Alertas de estrutura: {keyDocument.issues.join(" · ")}</small>}</div>}<p>Respostas organizadas por número, por exemplo: <b>1-A, 2-B, 3-D</b>. Use * para anulada.</p><textarea rows="4" value={answerKey} onChange={(event) => {setAnswerKey(event.target.value);setKeyDocument(null);}} placeholder="1-A, 2-B, 3-*..." /><button type="button" className="light" onClick={applyAnswerKey}>Aplicar gabarito às questões</button></section><section className="card system2-summary"><div><span className="eyebrow">IMPORTAÇÃO</span><b>Arquivo: {file?.name}</b><small>{metadata.concurso} · {metadata.edicao && `${metadata.edicao} · `}{metadata.ano} · {metadata.banca}</small></div><div><b>{drafts.length}</b><small>Questões identificadas</small></div><div><b>{noWarnings}</b><small>Sem alertas</small></div><div><b>{drafts.length - noWarnings}</b><small>Revisão recomendada</small></div></section><div className="system2-review-actions"><label><input type="checkbox" checked={drafts.filter(item=>item.correct_option!=="*").every(item=>item.selected)} onChange={(event) => setDrafts(items => items.map(item => ({ ...item, selected:item.correct_option==="*" ? false : event.target.checked })))} /> Selecionar todas as válidas</label><small>{drafts.filter(item=>item.correct_option==="*").length} anulada(s) excluída(s) do salvamento</small><button disabled={busy} onClick={save}>{busy ? "Salvando…" : "Salvar questões"}</button></div><div className="system2-question-list">{drafts.map((item) => <article className="card system2-question-card" key={item.id}><div className="card-top"><label className="card-check"><input type="checkbox" disabled={item.correct_option==="*"} checked={item.correct_option==="*" ? false : item.selected} onChange={(event) => patchQuestion(item.id, { selected:event.target.checked })} /> {item.correct_option==="*" ? "Anulada — excluída" : "Salvar"}</label><b>Questão {String(item.question_number).padStart(2, "0")}</b>{item.correct_option && <span className="system2-gabarito">Gabarito: {item.correct_option === "*" ? "Anulada — não será salva" : item.correct_option}</span>}<button className="light compact" onClick={() => setDrafts((items) => items.filter((entry) => entry.id !== item.id))}>Excluir da importação</button></div>{item.warnings.map((warning) => <p className="system2-warning" key={warning}>⚠ {warning}</p>)}<label>Número<input type="number" value={item.question_number} onChange={(event) => patchQuestion(item.id, { question_number:Number(event.target.value) || "" })} /></label><label>Enunciado<textarea rows="6" value={item.statement} onChange={(event) => patchQuestion(item.id, { statement:event.target.value })} /></label><div className="system2-alternatives">{item.alternatives.map((alternative, index) => <label key={`${alternative.letter}-${index}`}><b>{alternative.letter})</b><textarea rows="3" value={alternative.text} onChange={(event) => patchQuestion(item.id, { alternatives:item.alternatives.map((entry, position) => position === index ? { ...entry, text:event.target.value } : entry) })} /></label>)}</div></article>)}</div></>}</section>;
 }

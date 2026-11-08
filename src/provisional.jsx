@@ -67,7 +67,16 @@ export function ProvisionalCreator({supabase,userId,questions=[],onCreated,onCan
 
  async function invoke(mode,payload){
    const {data,error:requestError}=await supabase.functions.invoke("analyze-edital",{body:{mode,...payload}});
-   if(requestError)throw new Error(data?.error || requestError.message || "Não foi possível consultar o Groq.");
+   if(requestError){
+     let detail=data?.error;
+     try{
+       if(!detail && requestError.context && typeof requestError.context.json==="function"){
+         const response=await requestError.context.json();
+         detail=response?.error;
+       }
+     }catch{/* Resposta sem JSON válido. */}
+     throw new Error(detail || "Não foi possível analisar o edital agora. Tente novamente.");
+   }
    if(data?.error)throw new Error(data.error);
    return data?.result;
  }

@@ -1,4 +1,5 @@
 import React from "react";
+import { parseOabAnswerKeyPdf, detectExamType, formatAnswerKey } from "./answer-key-pdf";
 import * as pdfjs from "pdfjs-dist";
 
 const cleanSpace = (value) => String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
@@ -290,7 +291,7 @@ export function System2Test({ supabase, onBack }) {
 }
 
 export function System2Cadastro({ supabase, onBack }) {
-  const [metadata, setMetadata] = React.useState(emptyMetadata), [routing, setRouting] = React.useState(null), [routingSubjects, setRoutingSubjects] = React.useState(""), [file, setFile] = React.useState(null), [drafts, setDrafts] = React.useState([]), [info, setInfo] = React.useState(null), [answerKey, setAnswerKey] = React.useState(""), [busy, setBusy] = React.useState(false), [notice, setNotice] = React.useState("");
+  const [metadata, setMetadata] = React.useState(emptyMetadata), [routing, setRouting] = React.useState(null), [routingSubjects, setRoutingSubjects] = React.useState(""), [file, setFile] = React.useState(null), [drafts, setDrafts] = React.useState([]), [info, setInfo] = React.useState(null), [answerKey, setAnswerKey] = React.useState(""), [keyDocument,setKeyDocument] = React.useState(null), [examType,setExamType] = React.useState(""), [busy, setBusy] = React.useState(false), [notice, setNotice] = React.useState("");
   React.useEffect(() => {
     let active = true;
     if (!metadata.concurso.trim()) { setRouting(null); return undefined; }
@@ -307,7 +308,7 @@ export function System2Cadastro({ supabase, onBack }) {
   const patchMeta = (key, value) => setMetadata((current) => ({ ...current, [key]: value }));
   const patchQuestion = (id, patch) => setDrafts((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
   function selectFile(fileToRead) {
-    setFile(fileToRead); setDrafts([]); setInfo(null); setNotice(`Arquivo selecionado: ${fileToRead.name}. Clique em “Extrair questões para revisão”.`);
+    setFile(fileToRead); setDrafts([]); setInfo(null); setExamType(""); setKeyDocument(null); setAnswerKey(""); setNotice(`Arquivo selecionado: ${fileToRead.name}. Clique em “Extrair questões para revisão”.`);
   }
   async function inspectFile() {
     if (!file) return setNotice("Selecione um PDF antes de extrair.");
@@ -316,6 +317,7 @@ export function System2Cadastro({ supabase, onBack }) {
       const result = await extractPdfV2(file);
       const parsed = parseQuestionsV2(result.text);
       setInfo(result); setDrafts(parsed);
+      setExamType(detectExamType(result.text) || "");
       if (!parsed.length) { setNotice("Não encontrei questões objetivas com número e alternativas. Verifique se o PDF possui texto selecionável."); return; }
       let cleaned = [...parsed], providerName = "extração local", errorMessage = "";
       for (let start = 0; start < parsed.length; start += 6) {
@@ -351,24 +353,70 @@ export function System2Cadastro({ supabase, onBack }) {
         : `${cleaned.length} questões revisadas pela IA (${providerName}). Confira enunciados, alternativas e gabarito antes de salvar.`);
     } catch (error) { setNotice(`Não foi possível ler o PDF: ${error.message}`); } finally { setBusy(false); }
   }
-  async function readAnswerKeyPdf(sourceFile) { try { setNotice("Lendo o gabarito oficial em PDF…"); const extracted=await extractPdfV2(sourceFile); setAnswerKey(extracted.text); setNotice("Gabarito PDF carregado. Confira e clique em Aplicar gabarito."); } catch(error) {setNotice("Não foi possível ler o gabarito: "+error.message);} }
+  function applyEntries(entries, type, edition) {
+    const expectedEdition = String(metadata.edicao || "").match(/\\d+/)?.[0] || "";
+    if (edition && expectedEdition && edition !== expectedEdition) {
+      setNotice("Atenção: o gabarito é do " + edition + "º Exame, mas a prova está identificada como " + expectedEdition + "º. Confira os PDFs antes de aplicar.");
+      return;
+    }
+    const map = new Map(entries.map(item => [Number(item.question), item.answer]));
+    const missing = drafts.filter(item => item.selected && !map.has(Number(item.question_number)));
+    if (missing.length) {
+      setNotice("Gabarito incompleto: faltam respostas para " + missing.length + " questões selecionadas. Nenhuma resposta foi aplicada.");
+      return;
+    }
+    setAnswerKey(formatAnswerKey(entries));
+    setDrafts(items => items.map(item => map.has(Number(item.question_number)) ?
+      { ...item, correct_option:map.get(Number(item.question_number)) } : item));
+    const cancelled = entries.filter(item => item.answer === "*").length;
+    setNotice("Gabarito do Tipo " + type + " organizado e aplicado: " + entries.length + " respostas na ordem correta" +
+      (cancelled ? " (" + cancelled + " anulada(s))." : "."));
+  }
+  async function readAnswerKeyPdf(sourceFile) {
+    setNotice("Lendo as tabelas e identificando os tipos de prova…");
+    setKeyDocument(null);
+    setAnswerKey("");
+    try {
+      const document = await parseOabAnswerKeyPdf(sourceFile,pdfjs);
+      if (!document.typesAvailable.length) {
+        setNotice("Não encontrei tabelas completas de gabarito da OAB nesse PDF. Nenhuma resposta foi aplicada.");
+        return;
+      }
+      setKeyDocument(document);
+      const chosenType = document.typesAvailable.includes(examType) ? examType :
+        (document.typesAvailable.length === 1 ? document.typesAvailable[0] : "");
+      if (chosenType) {
+        setExamType(chosenType);
+        applyEntries(document.types[chosenType],chosenType,document.edition);
+      } else {
+        setNotice("Encontrei " + document.typesAvailable.length + " tipos de gabarito, com " +
+          document.types[document.typesAvailable[0]].length + " respostas cada. Selecione o tipo da sua prova antes de aplicar.");
+      }
+    } catch (error) {
+      setNotice("Não foi possível processar o gabarito: " + error.message);
+    }
+  }
+
   function applyAnswerKey() {
     if (!drafts.length) return setNotice("Extraia as questões antes de aplicar o gabarito.");
-    const parsed = parseAnswerKeyV2(answerKey); if (!parsed.size) return setNotice("Não identifiquei respostas no gabarito. Exemplo: 1 D 2 B 3 E 4 *");
-    let applied = 0;
-    setDrafts((items) => items.map((item) => {
-      const correctOption = parsed.get(Number(item.question_number));
-      if (!correctOption) return item;
-      applied += 1;
-      return { ...item, correct_option:correctOption };
-    }));
-    setNotice(`${applied} resposta(s) do gabarito aplicada(s) às questões extraídas.`);
+    if (keyDocument) {
+      if (!examType || !keyDocument.types[examType]) return setNotice("Selecione primeiro o tipo correto da prova.");
+      return applyEntries(keyDocument.types[examType],examType,keyDocument.edition);
+    }
+    const parsed = parseAnswerKeyV2(answerKey);
+    if (!parsed.size) return setNotice("Não identifiquei respostas numeradas. Exemplo: 1-A, 2-B, 3-*.");
+    const missing = drafts.filter(item => item.selected && !parsed.has(Number(item.question_number)));
+    if (missing.length) return setNotice("O texto não possui resposta para " + missing.length + " questão(ões) selecionada(s). Nada foi aplicado.");
+    setDrafts(items => items.map(item => parsed.has(Number(item.question_number)) ?
+      { ...item, correct_option:parsed.get(Number(item.question_number)) } : item));
+    setNotice(parsed.size + " resposta(s) numeradas aplicadas às questões extraídas.");
   }
   async function save() {
     const chosen = drafts.filter((item) => item.selected);
     if (!chosen.length) return setNotice("Selecione ao menos uma questão para salvar.");
     if (!metadata.concurso.trim() || !metadata.banca.trim() || !Number(metadata.ano)) return setNotice("Confira concurso, banca e ano antes de salvar.");
     if (chosen.some((item) => !item.statement.trim() || item.alternatives.length < 2)) return setNotice("Revise as questões sem enunciado ou sem alternativas suficientes antes de salvar.");
+    if (keyDocument && (!examType || !keyDocument.types[examType])) return setNotice("Confirme o tipo da prova antes de salvar.");
     if (chosen.some((item) => !item.correct_option)) return setNotice("Aplique o gabarito oficial a todas as questões selecionadas antes de salvar.");
     if (chosen.some((item) => item.correct_option !== "*" && !item.alternatives.some((option) => option.letter === item.correct_option))) return setNotice("Há gabaritos incompatíveis com as alternativas. Confira antes de salvar.");
     setBusy(true); setNotice("");
@@ -382,5 +430,5 @@ export function System2Cadastro({ supabase, onBack }) {
     } catch (error) { setNotice(`Não foi possível salvar: ${error.message}`); } finally { setBusy(false); }
   }
   const noWarnings = drafts.filter((item) => !item.warnings.length).length;
-  return <section className="system2-page"><button className="link-button" onClick={onBack}>← Voltar ao Modelo novo</button><span className="eyebrow">NOVO CADASTRO DE QUESTÕES</span><h1>Importar e revisar prova</h1><p className="system2-lead">Envie o PDF. O Groq sugere os metadados e limpa as questões, enquanto você confere os dados e o gabarito antes de salvar.</p>{notice && <p className="form-message">{notice}</p>}<section className="card system2-form"><h2>Dados da prova</h2><div className="system2-fields"><label>Concurso *<input value={metadata.concurso} onChange={(event) => patchMeta("concurso", event.target.value)} placeholder="Exame de Ordem Unificado" /></label><label>Edição<input value={metadata.edicao} onChange={(event) => patchMeta("edicao", event.target.value)} placeholder="46ª" /></label><label>Ano *<input type="number" value={metadata.ano} onChange={(event) => patchMeta("ano", event.target.value)} /></label><label>Banca *<input value={metadata.banca} onChange={(event) => patchMeta("banca", event.target.value)} placeholder="FGV" /></label><label>Cargo<input value={metadata.cargo} onChange={(event) => patchMeta("cargo", event.target.value)} /></label><label>Data da prova<input type="date" value={metadata.application_date} onChange={(event) => patchMeta("application_date", event.target.value)} /></label><label>Matérias do concurso (para aproveitamento inicial)<input value={routingSubjects} onChange={event=>setRoutingSubjects(event.target.value)} placeholder="Direito Constitucional; Direito Administrativo"/></label></div>{routing && <div className="system2-note"><b>{routing.ready ? (routing.matched ? "Caderno existente identificado" : "Novo caderno sugerido") : "Identificação incompleta"}</b><p>{routing.ready ? routing.title : routing.reason}</p><small>O caderno só será criado ao salvar. Ano, edição e banca identificam a prova, não um novo caderno. O aproveitamento por matéria é realizado apenas na criação.</small></div>}<div className="system2-upload"><b>Enviar prova</b><small>PDF com texto selecionável. O arquivo é processado apenas para revisão; as questões só serão gravadas ao final.</small><label className={`drop ${file ? "file-ready" : ""}`}>{file ? `✓ PDF selecionado: ${file.name}` : "Selecionar PDF"}<input hidden type="file" accept="application/pdf" disabled={busy} onChange={(event) => event.target.files?.[0] && selectFile(event.target.files[0])} /></label>{file && <button type="button" disabled={busy} onClick={inspectFile}>{busy ? "Extraindo questões…" : "Extrair questões para revisão"}</button>}</div></section>{drafts.length > 0 && <><section className="card system2-answer-key"><h2>Gabarito da prova</h2><label className="drop">Selecionar gabarito oficial em PDF<input hidden type="file" accept="application/pdf" onChange={event=>event.target.files?.[0]&&readAnswerKeyPdf(event.target.files[0])}/></label><p>Você também pode colar no formato <b>1 D 2 B 3 E 4 *</b>. Use * ou X para questão anulada.</p><textarea rows="4" value={answerKey} onChange={(event) => setAnswerKey(event.target.value)} placeholder="1 D 2 B 3 E 4 * 5 A" /><button type="button" className="light" onClick={applyAnswerKey}>Aplicar gabarito às questões</button></section><section className="card system2-summary"><div><span className="eyebrow">IMPORTAÇÃO</span><b>Arquivo: {file?.name}</b><small>{metadata.concurso} · {metadata.edicao && `${metadata.edicao} · `}{metadata.ano} · {metadata.banca}</small></div><div><b>{drafts.length}</b><small>Questões identificadas</small></div><div><b>{noWarnings}</b><small>Sem alertas</small></div><div><b>{drafts.length - noWarnings}</b><small>Revisão recomendada</small></div></section><div className="system2-review-actions"><label><input type="checkbox" checked={drafts.every((item) => item.selected)} onChange={(event) => setDrafts((items) => items.map((item) => ({ ...item, selected:event.target.checked })))} /> Selecionar todas</label><button disabled={busy} onClick={save}>{busy ? "Salvando…" : "Salvar questões"}</button></div><div className="system2-question-list">{drafts.map((item) => <article className="card system2-question-card" key={item.id}><div className="card-top"><label className="card-check"><input type="checkbox" checked={item.selected} onChange={(event) => patchQuestion(item.id, { selected:event.target.checked })} /> Salvar</label><b>Questão {String(item.question_number).padStart(2, "0")}</b>{item.correct_option && <span className="system2-gabarito">Gabarito: {item.correct_option === "*" ? "Anulada" : item.correct_option}</span>}<button className="light compact" onClick={() => setDrafts((items) => items.filter((entry) => entry.id !== item.id))}>Excluir da importação</button></div>{item.warnings.map((warning) => <p className="system2-warning" key={warning}>⚠ {warning}</p>)}<label>Número<input type="number" value={item.question_number} onChange={(event) => patchQuestion(item.id, { question_number:Number(event.target.value) || "" })} /></label><label>Enunciado<textarea rows="6" value={item.statement} onChange={(event) => patchQuestion(item.id, { statement:event.target.value })} /></label><div className="system2-alternatives">{item.alternatives.map((alternative, index) => <label key={`${alternative.letter}-${index}`}><b>{alternative.letter})</b><textarea rows="3" value={alternative.text} onChange={(event) => patchQuestion(item.id, { alternatives:item.alternatives.map((entry, position) => position === index ? { ...entry, text:event.target.value } : entry) })} /></label>)}</div></article>)}</div></>}</section>;
+  return <section className="system2-page"><button className="link-button" onClick={onBack}>← Voltar ao Modelo novo</button><span className="eyebrow">NOVO CADASTRO DE QUESTÕES</span><h1>Importar e revisar prova</h1><p className="system2-lead">Envie o PDF. O Groq sugere os metadados e limpa as questões, enquanto você confere os dados e o gabarito antes de salvar.</p>{notice && <p className="form-message">{notice}</p>}<section className="card system2-form"><h2>Dados da prova</h2><div className="system2-fields"><label>Concurso *<input value={metadata.concurso} onChange={(event) => patchMeta("concurso", event.target.value)} placeholder="Exame de Ordem Unificado" /></label><label>Edição<input value={metadata.edicao} onChange={(event) => patchMeta("edicao", event.target.value)} placeholder="46ª" /></label><label>Ano *<input type="number" value={metadata.ano} onChange={(event) => patchMeta("ano", event.target.value)} /></label><label>Banca *<input value={metadata.banca} onChange={(event) => patchMeta("banca", event.target.value)} placeholder="FGV" /></label><label>Cargo<input value={metadata.cargo} onChange={(event) => patchMeta("cargo", event.target.value)} /></label><label>Data da prova<input type="date" value={metadata.application_date} onChange={(event) => patchMeta("application_date", event.target.value)} /></label><label>Matérias do concurso (para aproveitamento inicial)<input value={routingSubjects} onChange={event=>setRoutingSubjects(event.target.value)} placeholder="Direito Constitucional; Direito Administrativo"/></label></div>{routing && <div className="system2-note"><b>{routing.ready ? (routing.matched ? "Caderno existente identificado" : "Novo caderno sugerido") : "Identificação incompleta"}</b><p>{routing.ready ? routing.title : routing.reason}</p><small>O caderno só será criado ao salvar. Ano, edição e banca identificam a prova, não um novo caderno. O aproveitamento por matéria é realizado apenas na criação.</small></div>}<div className="system2-upload"><b>Enviar prova</b><small>PDF com texto selecionável. O arquivo é processado apenas para revisão; as questões só serão gravadas ao final.</small><label className={`drop ${file ? "file-ready" : ""}`}>{file ? `✓ PDF selecionado: ${file.name}` : "Selecionar PDF"}<input hidden type="file" accept="application/pdf" disabled={busy} onChange={(event) => event.target.files?.[0] && selectFile(event.target.files[0])} /></label>{file && <button type="button" disabled={busy} onClick={inspectFile}>{busy ? "Extraindo questões…" : "Extrair questões para revisão"}</button>}</div></section>{drafts.length > 0 && <><section className="card system2-answer-key"><h2>Gabarito da prova</h2><label className="drop">Selecionar gabarito oficial em PDF<input hidden type="file" accept="application/pdf" onChange={event=>event.target.files?.[0]&&readAnswerKeyPdf(event.target.files[0])}/></label>{keyDocument && <div className="system2-note"><p><b>{keyDocument.typesAvailable.length} tipo(s) identificado(s)</b> · {keyDocument.edition ? keyDocument.edition + "º Exame de Ordem · " : ""}80 respostas por tipo</p><label>Tipo da sua prova *<select value={examType} onChange={event=>{const type=event.target.value;setExamType(type);setAnswerKey("");setDrafts(items=>items.map(item=>({...item,correct_option:""})));}}><option value="">Selecione o tipo</option>{keyDocument.typesAvailable.map(type=><option key={type} value={type}>Prova Tipo {type}</option>)}</select></label>{!examType && <p>Não foi possível identificar o tipo na prova. Escolha-o antes de aplicar.</p>}{examType && keyDocument.types[examType] && <button className="light" onClick={()=>applyEntries(keyDocument.types[examType],examType,keyDocument.edition)}>Organizar e aplicar Tipo {examType}</button>}{keyDocument.issues.length>0 && <small>Alertas de estrutura: {keyDocument.issues.join(" · ")}</small>}</div>}<p>Respostas organizadas por número, por exemplo: <b>1-A, 2-B, 3-D</b>. Use * para anulada.</p><textarea rows="4" value={answerKey} onChange={(event) => {setAnswerKey(event.target.value);setKeyDocument(null);}} placeholder="1-A, 2-B, 3-*..." /><button type="button" className="light" onClick={applyAnswerKey}>Aplicar gabarito às questões</button></section><section className="card system2-summary"><div><span className="eyebrow">IMPORTAÇÃO</span><b>Arquivo: {file?.name}</b><small>{metadata.concurso} · {metadata.edicao && `${metadata.edicao} · `}{metadata.ano} · {metadata.banca}</small></div><div><b>{drafts.length}</b><small>Questões identificadas</small></div><div><b>{noWarnings}</b><small>Sem alertas</small></div><div><b>{drafts.length - noWarnings}</b><small>Revisão recomendada</small></div></section><div className="system2-review-actions"><label><input type="checkbox" checked={drafts.every((item) => item.selected)} onChange={(event) => setDrafts((items) => items.map((item) => ({ ...item, selected:event.target.checked })))} /> Selecionar todas</label><button disabled={busy} onClick={save}>{busy ? "Salvando…" : "Salvar questões"}</button></div><div className="system2-question-list">{drafts.map((item) => <article className="card system2-question-card" key={item.id}><div className="card-top"><label className="card-check"><input type="checkbox" checked={item.selected} onChange={(event) => patchQuestion(item.id, { selected:event.target.checked })} /> Salvar</label><b>Questão {String(item.question_number).padStart(2, "0")}</b>{item.correct_option && <span className="system2-gabarito">Gabarito: {item.correct_option === "*" ? "Anulada" : item.correct_option}</span>}<button className="light compact" onClick={() => setDrafts((items) => items.filter((entry) => entry.id !== item.id))}>Excluir da importação</button></div>{item.warnings.map((warning) => <p className="system2-warning" key={warning}>⚠ {warning}</p>)}<label>Número<input type="number" value={item.question_number} onChange={(event) => patchQuestion(item.id, { question_number:Number(event.target.value) || "" })} /></label><label>Enunciado<textarea rows="6" value={item.statement} onChange={(event) => patchQuestion(item.id, { statement:event.target.value })} /></label><div className="system2-alternatives">{item.alternatives.map((alternative, index) => <label key={`${alternative.letter}-${index}`}><b>{alternative.letter})</b><textarea rows="3" value={alternative.text} onChange={(event) => patchQuestion(item.id, { alternatives:item.alternatives.map((entry, position) => position === index ? { ...entry, text:event.target.value } : entry) })} /></label>)}</div></article>)}</div></>}</section>;
 }

@@ -53,13 +53,16 @@ begin
 end;
 $$;
 
+drop function if exists public.notebook_resolve_v63(text,text,text[]);
 create or replace function public.notebook_resolve_v63(
  p_concurso text,
- p_cargo text default '',
- p_subjects text[] default array[]::text[]
+ p_cargo text,
+ p_subjects text[],
+ p_expected_count integer
 ) returns jsonb language plpgsql security invoker set search_path='public' as $$
 declare
  preview jsonb; k text; v_id uuid; created boolean:=false; borrowed integer:=0;
+ needed integer:=greatest(0,10-greatest(0,coalesce(p_expected_count,0)));
 begin
  if not public.is_admin() then raise exception 'Acesso restrito ao administrador'; end if;
  preview:=public.notebook_preview_v63(p_concurso,p_cargo,p_subjects);
@@ -78,9 +81,8 @@ begin
   returning id into v_id;
   created:=true;
 
-  -- Aproveitamento SOMENTE ao criar caderno com menos de 10 questoes.
-  -- Apenas questoes publicadas com materia ou assunto explicitamente correspondente.
-  if coalesce(array_length(p_subjects,1),0)>0 then
+  -- Aproveita somente ao criar e apenas para completar até 10 questões no total.
+  if needed>0 and coalesce(array_length(p_subjects,1),0)>0 then
     with matched as (
       select distinct q.id
       from public.questions q
@@ -100,7 +102,7 @@ begin
           )
         )
       order by q.id
-      limit 10
+      limit needed
     ), inserted as (
       insert into public.notebook_questions(notebook_id,question_id,origin)
       select v_id,id,'borrowed' from matched on conflict do nothing returning 1
@@ -108,8 +110,8 @@ begin
     select count(*) into borrowed from inserted;
   end if;
  end if;
- return jsonb_build_object('ready',true,'notebook_id',v_id,'title',coalesce(preview->>'title',
-   (select title from public.study_notebooks where id=v_id)),
+ return jsonb_build_object('ready',true,'notebook_id',v_id,'title',
+   (select title from public.study_notebooks where id=v_id),
    'created',created,'borrowed',borrowed,'identity_key',k);
 end;
 $$;
@@ -119,4 +121,4 @@ update public.study_notebooks set identity_key='oab' where code='oab' and identi
 
 grant execute on function public.notebook_identity_v63(text,text) to authenticated;
 grant execute on function public.notebook_preview_v63(text,text,text[]) to authenticated;
-grant execute on function public.notebook_resolve_v63(text,text,text[]) to authenticated;
+grant execute on function public.notebook_resolve_v63(text,text,text[],integer) to authenticated;

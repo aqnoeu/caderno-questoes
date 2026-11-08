@@ -65,8 +65,9 @@ Deno.serve(async (request) => {
     const { data: profile } = await admin.from("profiles").select("role").eq("id", authData.user.id).maybeSingle();
     if (profile?.role !== "admin") return json({ error: "Acesso restrito ao administrador." }, 403);
 
-    const { data: providers } = await admin.from('ai_provider_settings').select('essay_import_provider').eq('id',true).single();
-    const provider = providers?.essay_import_provider || 'groq';
+    const { data: providers } = await admin.from('ai_provider_settings').select('essay_import_provider,piece_import_provider').eq('id',true).single();
+    const isPiece = questions.length > 0 && questions.every((item: any) => item?.question_type === 'piece');
+    const provider = isPiece ? (providers?.piece_import_provider || 'groq') : (providers?.essay_import_provider || 'groq');
     if (provider === 'gemini' && !apiKey) return json({ error:'GEMINI_API_KEY não configurada.' },500);
     const { questions = [] } = await request.json().catch(() => ({}));
     if (!Array.isArray(questions) || !questions.length) return json({ error: "Envie ao menos uma questão." }, 400);

@@ -2,6 +2,14 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## v61 — 2026-11-08
+
+- Prettier 3.6.2 instalado como dependência de desenvolvimento, com configuração única para JavaScript, JSX, TypeScript, JSON e CSS; comandos `npm run format -- arquivo` e `npm run format:check -- arquivo`.
+- Verificação automática em pull requests para **novos arquivos de código**, sem exigir reformatação imediata do acervo já existente.
+- Instruções compartilhadas para IA e colaboradores em `AGENTS.md` e `CLAUDE.md`; guia em `docs/FORMATACAO_PRETTIER.md`.
+- Nenhuma mudança na lógica, nos componentes, no Supabase, na integração de IA ou na interface.
+- Backup anterior: branch `backup/2026-11-08-antes-v61`.
+
 ## v59 — 2026-11-07
 
 - Segunda IA gratuita (Groq) nas tarefas auxiliares do desafio diário: gerar afirmações a partir das questões cadastradas e sugerir/montar as questões do dia. A Groq responde primeiro; se falhar, atingir o limite ou devolver algo inválido, o Gemini assume automaticamente.

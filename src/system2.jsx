@@ -342,6 +342,8 @@ export function System2Cadastro({ supabase, onBack }) {
     if (!chosen.length) return setNotice("Selecione ao menos uma questão para salvar.");
     if (!metadata.concurso.trim() || !metadata.banca.trim() || !Number(metadata.ano) || !metadata.notebook_id) return setNotice("Confira o concurso, a banca, o ano e selecione o caderno de destino antes de salvar.");
     if (chosen.some((item) => !item.statement.trim() || item.alternatives.length < 2)) return setNotice("Revise as questões sem enunciado ou sem alternativas suficientes antes de salvar.");
+    if (chosen.some((item) => !item.correct_option)) return setNotice("Aplique o gabarito oficial a todas as questões selecionadas antes de salvar.");
+    if (chosen.some((item) => item.correct_option !== "*" && !item.alternatives.some((option) => option.letter === item.correct_option))) return setNotice("Há gabaritos incompatíveis com as alternativas. Confira antes de salvar.");
     setBusy(true); setNotice("");
     try {
       const { data: imported, error: importError } = await supabase.from("question_imports").insert({ file_name:file?.name || "prova.pdf", concurso:metadata.concurso.trim(), edicao:metadata.edicao.trim() || null, ano:Number(metadata.ano), banca:metadata.banca.trim(), notebook_id:metadata.notebook_id, cargo:metadata.cargo.trim() || null, application_date:metadata.application_date || null, total_extracted:drafts.length, total_selected:chosen.length, import_metadata:{ page_count:info?.pageCount || 0, removed_repeated_layout_lines:info?.removedLayoutLines || 0 } }).select("id").single();

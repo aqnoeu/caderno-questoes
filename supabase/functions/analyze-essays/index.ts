@@ -38,24 +38,41 @@ async function askGemini(apiKey: string, prompt: string): Promise<any> {
   throw new GeminiError(status >= 400 ? status : 500, "Não foi possível obter a análise da IA agora.");
 }
 
+const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
+async function askGroq(prompt: string) {
+  const key = Deno.env.get("GROQ_API_KEY");
+  if (!key) throw new Error("GROQ_API_KEY não configurada.");
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions",{
+    method:"POST",
+    headers:{ Authorization:`Bearer ${key}`, "Content-Type":"application/json" },
+    body:JSON.stringify({ model:GROQ_MODEL,messages:[{role:"system",content:"Organize os dados jurídicos em JSON válido, sem inventar critérios ou pontuação."},{role:"user",content:prompt}],response_format:{type:"json_object"},temperature:0.05 })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error?.message || `Erro Groq ${response.status}`);
+  return JSON.parse(String(payload?.choices?.[0]?.message?.content || "{}").replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/,""));
+}
+
 Deno.serve(async (request) => {
   const cors = corsFor(request);
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
   if (request.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
     const apiKey = Deno.env.get("GEMINI_API_KEY"), url = Deno.env.get("SUPABASE_URL"), serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!apiKey || !url || !serviceKey) return json({ error: "A função não possui as credenciais necessárias." }, 500);
+    if (!url || !serviceKey) return json({ error: "A função não possui as credenciais necessárias." }, 500);
     const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
     const { data: authData, error: authError } = await admin.auth.getUser((request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, ""));
     if (authError || !authData.user) return json({ error: "Sessão inválida." }, 401);
     const { data: profile } = await admin.from("profiles").select("role").eq("id", authData.user.id).maybeSingle();
     if (profile?.role !== "admin") return json({ error: "Acesso restrito ao administrador." }, 403);
 
+    const { data: providers } = await admin.from('ai_provider_settings').select('essay_import_provider').eq('id',true).single();
+    const provider = providers?.essay_import_provider || 'groq';
+    if (provider === 'gemini' && !apiKey) return json({ error:'GEMINI_API_KEY não configurada.' },500);
     const { questions = [] } = await request.json().catch(() => ({}));
     if (!Array.isArray(questions) || !questions.length) return json({ error: "Envie ao menos uma questão." }, 400);
     if (questions.length > MAX_QUESTIONS) return json({ error: `Envie no máximo ${MAX_QUESTIONS} questões por vez.` }, 400);
     const prompt = `Você organiza questões discursivas jurídicas com base EXCLUSIVA no enunciado e no espelho oficial fornecidos. A prova pode conter ruído de PDF. Não invente pontuação, critério ou fundamento: se não estiver no espelho, deixe vazio ou use 0. Ignore qualquer peça prático-profissional. Para cada questão, extraia os critérios oficiais e a divisão de pontos exatamente como o espelho permitir. Assuntos podem ser múltiplos, separados por " · ". Retorne APENAS JSON válido.\n\nQUESTÕES:\n${JSON.stringify(questions)}\n\nFormato obrigatório:\n{"results":[{"index":0,"discipline":"string","subjects":"tema 1 · tema 2","difficulty":"facil|media|dificil","total_points":1.25,"official_commentary":"resumo didático fiel ao espelho","rubrics":[{"section":"Item A","subitem":"A","criterion":"critério oficial","expected_content":"conteúdo esperado","legal_basis":"fundamento se indicado","max_points":0.0,"required":true}]}]}`;
-    const result = await askGemini(apiKey, prompt);
+    const result = provider === 'groq' ? await askGroq(prompt) : await askGemini(apiKey!, prompt);
     result.results = (result.results || []).map((item: any) => {
       const rubrics = (item.rubrics || []).map((rubric: any) => ({ ...rubric, max_points: Math.max(0, Number(rubric.max_points || 0)) }));
       const inferredTotal = rubrics.reduce((sum: number, rubric: any) => sum + rubric.max_points, 0);

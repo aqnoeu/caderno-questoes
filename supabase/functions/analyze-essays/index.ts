@@ -65,12 +65,12 @@ Deno.serve(async (request) => {
     const { data: profile } = await admin.from("profiles").select("role").eq("id", authData.user.id).maybeSingle();
     if (profile?.role !== "admin") return json({ error: "Acesso restrito ao administrador." }, 403);
 
-    const { data: providers } = await admin.from('ai_provider_settings').select('essay_import_provider,piece_import_provider').eq('id',true).single();
-    const isPiece = questions.length > 0 && questions.every((item: any) => item?.question_type === 'piece');
-    const provider = isPiece ? (providers?.piece_import_provider || 'groq') : (providers?.essay_import_provider || 'groq');
-    if (provider === 'gemini' && !apiKey) return json({ error:'GEMINI_API_KEY não configurada.' },500);
     const { questions = [] } = await request.json().catch(() => ({}));
     if (!Array.isArray(questions) || !questions.length) return json({ error: "Envie ao menos uma questão." }, 400);
+    const { data: providers } = await admin.from('ai_provider_settings').select('essay_import_provider,piece_import_provider').eq('id',true).single();
+    const isPiece = questions.every((item: any) => item?.question_type === 'piece');
+    const provider = isPiece ? (providers?.piece_import_provider || 'groq') : (providers?.essay_import_provider || 'groq');
+    if (provider === 'gemini' && !apiKey) return json({ error:'GEMINI_API_KEY não configurada.' },500);
     if (questions.length > MAX_QUESTIONS) return json({ error: `Envie no máximo ${MAX_QUESTIONS} questões por vez.` }, 400);
     const prompt = `Você organiza questões discursivas jurídicas com base EXCLUSIVA no enunciado e no espelho oficial fornecidos. A prova pode conter ruído de PDF. Não invente pontuação, critério ou fundamento: se não estiver no espelho, deixe vazio ou use 0. Quando question_type for 'piece', trate a entrada como uma peça prático-profissional e identifique os critérios, fundamentos, estrutura e pontuação do espelho oficial. Quando question_type for 'discursive', trate como questão discursiva. Não confunda as modalidades e jamais invente critérios ou valores. Para cada questão, extraia os critérios oficiais e a divisão de pontos exatamente como o espelho permitir. Assuntos podem ser múltiplos, separados por " · ". Retorne APENAS JSON válido.\n\nQUESTÕES:\n${JSON.stringify(questions)}\n\nFormato obrigatório:\n{"results":[{"index":0,"discipline":"string","subjects":"tema 1 · tema 2","difficulty":"facil|media|dificil","total_points":1.25,"official_commentary":"resumo didático fiel ao espelho","rubrics":[{"section":"Item A","subitem":"A","criterion":"critério oficial","expected_content":"conteúdo esperado","legal_basis":"fundamento se indicado","max_points":0.0,"required":true}]}]}`;
     const result = provider === 'groq' ? await askGroq(prompt) : await askGemini(apiKey!, prompt);

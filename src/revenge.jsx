@@ -24,6 +24,15 @@ async function requestRevenge(supabase, notebookId, cycleId, action, extra = {})
   return data;
 }
 
+// Negrito seguro, sem interpretar HTML de textos cadastrados.
+function ChatText({ text }) {
+  return String(text || "").split(/(\\*\\*[^*\\n]+\\*\\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={index}>{part.slice(2, -2)}</strong>
+      : <React.Fragment key={index}>{part}</React.Fragment>,
+  );
+}
+
 function ChatBubble({ message, showAvatar, mascot }) {
   return (
     <div className={"revenge-message revenge-message-" + message.role}>
@@ -31,11 +40,18 @@ function ChatBubble({ message, showAvatar, mascot }) {
         <img className="revenge-avatar" src={mascot} alt="Caderno, mascote do aplicativo" />
       )}
       <div className="revenge-bubble">
-        {message.title && <strong>{message.title}</strong>}
-        <span>{message.text}</span>
+        <small className="revenge-sender">{message.role === "bot" ? "Caderno" : "Você"}</small>
+        <span><ChatText text={message.text} /></span>
       </div>
     </div>
   );
+}
+
+// Pausa baseada no texto anterior; indicador de digitação permanece visível.
+function readingDelay(message) {
+  if (!message) return 900;
+  const length = String(message.text || "").length;
+  return Math.min(5200, Math.max(1300, length * 32)) + 650;
 }
 
 function TypingBubble({ showAvatar, mascot }) {
@@ -67,9 +83,9 @@ function Dialogue({ messages, phaseKey, groupKey, busy, mascotEnabled, children 
   }, [phaseKey, groupKey]);
   React.useEffect(() => {
     if (shown >= transcript.length) return undefined;
-    const timer = window.setTimeout(() => setShown((old) => Math.min(old + 1, transcript.length)), shown === 0 ? 180 : 680);
+    const timer = window.setTimeout(() => setShown((old) => Math.min(old + 1, transcript.length)), shown === 0 ? 950 : readingDelay(transcript[shown - 1]));
     return () => window.clearTimeout(timer);
-  }, [shown, transcript.length]);
+  }, [shown, transcript]);
   React.useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [shown, busy, phaseKey]);
@@ -265,17 +281,17 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
           + (d.number ? " — questão " + d.number : "") + (d.discipline ? " (" + d.discipline + ")" : "") + "." },
       ];
       if (d.selected_option) {
-        const marked = "Você marcou a alternativa " + d.selected_option + (d.selected_text ? ": " + d.selected_text : ".");
-        const actual = d.correct_option ? "\nA resposta correta era " + d.correct_option
+        const marked = "Você marcou a alternativa **" + d.selected_option + "**" + (d.selected_text ? ": " + d.selected_text : ".");
+        const actual = d.correct_option ? "\nA resposta correta era **" + d.correct_option + "**"
           + (d.correct_text ? ": " + d.correct_text : ".") : "";
-        messages.push({ role: "bot", title: "Onde você errou", text: marked + actual });
+        messages.push({ role: "bot", text: "🔎 " + marked + actual });
       }
-      if (d.mistake_type) messages.push({ role: "bot", title: "O que te confundiu", text: d.mistake_type });
-      if (d.wrong_reasoning) messages.push({ role: "bot", title: "A lógica do seu erro", text: d.wrong_reasoning });
-      else if (d.student_feedback) messages.push({ role: "bot", title: "Entenda o equívoco", text: d.student_feedback });
-      if (d.central_rule) messages.push({ role: "bot", title: "O que você precisava lembrar", text: d.central_rule });
-      if (d.study_content) messages.push({ role: "bot", title: "Para fixar", text: d.study_content });
-      else if (d.legal_basis) messages.push({ role: "bot", title: "Fundamento", text: d.legal_basis });
+      if (d.mistake_type) messages.push({ role: "bot", text: "O detalhe que te confundiu foi este: " + d.mistake_type });
+      if (d.wrong_reasoning) messages.push({ role: "bot", text: "Olha o raciocínio que levou à sua escolha: " + d.wrong_reasoning });
+      else if (d.student_feedback) messages.push({ role: "bot", text: "Vamos entender o que aconteceu: " + d.student_feedback });
+      if (d.central_rule) messages.push({ role: "bot", text: "📚 A regra jurídica que vale lembrar é: " + d.central_rule });
+      if (d.study_content) messages.push({ role: "bot", text: "Para guardar esse conteúdo: " + d.study_content });
+      else if (d.legal_basis) messages.push({ role: "bot", text: "O fundamento é: " + d.legal_basis });
       messages.push({ role: "bot", text: "Agora que vimos o ponto que te confundiu, quero saber se você aprendeu. Aceita uma revanche? 😏" });
       return messages;
     }
@@ -293,8 +309,7 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
         },
         {
           role: "bot",
-          title: "Afirmação " + (session.current?.attempt_number || 1),
-          text: session.current.statement || "",
+          text: "📝 Afirmação " + (session.current?.attempt_number || 1) + ": " + (session.current.statement || ""),
         },
       ];
     if (phase === "feedback")
@@ -302,16 +317,11 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
         { role: "user", text: lastAnswer ? "Verdadeiro" : "Falso" },
         {
           role: "bot",
-          title: result.correct
-            ? "Mandou bem! ✅"
-            : result.advanced
-              ? "Essa escapou. 📘"
-              : "Quase! Ainda há outra chance.",
           text: result.correct
-            ? "Você superou esse raciocínio. Gostei de ver!"
+            ? "Mandou bem! ✅ Você superou esse raciocínio. Gostei de ver!"
             : result.advanced
-              ? "Dessa vez não deu para superar, mas a revisão continua disponível."
-              : "Olha o detalhe que pegou você:",
+              ? "Essa escapou. 📘 Dessa vez não deu para superar, mas a revisão continua disponível."
+              : "Quase! Ainda há outra chance. Olha o detalhe que pegou você:",
         },
         { role: "bot", text: result.feedback || "Revise o fundamento antes de continuar." },
       ];

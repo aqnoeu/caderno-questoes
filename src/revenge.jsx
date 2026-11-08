@@ -237,7 +237,7 @@ export function RevengeMode({ supabase, userId, notebookId, initialCycleId, onBa
         },
         {
           role: "bot",
-          text: "Vou criar duas afirmações novas sobre o raciocínio que te confundiu. Meu colega Gemini vai conferir os fundamentos antes de você responder. Topa?",
+          text: "Vou criar duas afirmações novas sobre o raciocínio que te confundiu. Depois, uma segunda chamada ao Groq confere os fundamentos antes de você responder. Topa?",
         },
       ];
     if (phase === "question")

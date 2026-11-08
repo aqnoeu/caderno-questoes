@@ -949,3 +949,119 @@ button.annulled {
 .notification-options input{width:18px;height:18px;accent-color:#2364c6}
 .notification-options small{padding:14px 19px;color:#667892;line-height:1.55;font-size:12px}
 @media(max-width:600px){.header-actions{gap:6px}.header-actions .profile-menu{width:auto;min-width:0}.header-actions .profile-menu summary{width:auto}.header-actions .profile-menu>div{right:0;left:auto}.notification-bell{width:41px;height:43px}.notification-panel{position:fixed;top:76px;left:14px;right:14px;width:auto;max-height:70vh}.home-shortcut.review>span img{width:47px;height:47px}}
+
+
+/* v65.1 — Responsividade mobile e componentes novos sem alterar desktop */
+html,body,#root{max-width:100%;min-width:0}
+body{overflow-x:hidden}
+.app-shell{width:100%;min-width:0}
+.app-shell .home-grid,.app-shell .home-shortcuts,.app-shell .metric-grid,
+.app-shell .performance-card,.app-shell .continue-card,.app-shell .user-home,
+.app-shell .card{min-width:0}
+.home-grid{grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr)}
+.home-shortcuts{grid-template-columns:repeat(3,minmax(0,1fr))}
+.metric-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.performance-card{overflow:hidden}
+.cycle-bar-chart{max-width:100%;min-width:0;gap:8px}
+.cycle-bar i{max-width:100%}
+.batch-table-wrap,.table-wrap,.admin-content table,.planner-agenda{max-width:100%;overflow-x:auto}
+.question-statement,.revenge-bubble,.home-shortcut small{overflow-wrap:anywhere}
+.edital-creator,.planner-page{max-width:1080px;margin:0 auto;display:grid;gap:16px}
+.edital-heading,.planner-heading,.edital-topic-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.edital-heading h1,.planner-heading h1{margin:7px 0}
+.edital-heading p,.planner-heading p,.edital-topic-header p{color:#62738b;margin:6px 0}
+.edital-form{display:grid;gap:14px}
+.edital-form>label:not(.edital-expand),.planner-create>label,.planner-add>label{display:grid;gap:6px;font-size:14px;color:#314765}
+.edital-form input:not([type=checkbox]),.edital-form textarea,
+.planner-page input:not([type=checkbox]),.planner-page select{width:100%;max-width:100%;min-height:43px;padding:10px 12px;border:1px solid #cbd8e9;border-radius:9px;background:white;color:#20365e}
+.edital-form details{padding:12px;border:1px solid #e0e7f1;border-radius:12px}
+.edital-form details summary{cursor:pointer}
+.edital-form details textarea{margin:10px 0;min-height:120px}
+.edital-topics{display:grid;gap:8px;max-height:340px;overflow:auto}
+.edital-topic,.edital-add{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 75px auto;align-items:center;gap:8px}
+.edital-topic>button{min-width:43px;min-height:43px}
+.edital-expand{display:flex;align-items:flex-start;gap:10px;font-size:14px}
+.edital-expand input{width:18px;height:18px;flex:none}
+.edital-preview{border:1px solid #cbdcf2;padding:12px 14px;border-radius:10px;background:#f7faff;color:#365475;font-size:13px}
+.planner-page .card{padding:18px}
+.planner-heading select{min-width:180px;max-width:300px;padding:10px;border:1px solid #cbd8e9;border-radius:10px;background:white}
+.planner-create{display:grid;gap:14px;max-width:540px}
+.planner-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.planner-summary article{display:grid;gap:9px}
+.planner-summary small{color:#657993}
+.planner-summary b{font-size:24px;color:#1a386d}
+.planner-recommend{display:grid;gap:10px}
+.planner-recommend h2,.planner-recommend p{margin:0}
+.planner-recommend button{justify-self:start}
+.planner-recommend small{color:#637b98}
+.planner-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.planner-month-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.planner-month-head h2{font-size:18px;text-transform:capitalize;text-align:center;margin:0}
+.planner-month-head button{min-width:42px;min-height:42px}
+.planner-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;margin-top:12px}
+.planner-days>b{text-align:center;font-size:11px;color:#6d7e96;padding:7px 0}
+.planner-days>button{position:relative;min-width:0;aspect-ratio:1;padding:3px;border:1px solid #e3eaf3;border-radius:9px;background:#fff;color:#314968;font-weight:500;font-size:13px}
+.planner-days>button.selected{background:#e5f0ff;border-color:#4a8beb;color:#1459bb}
+.planner-days>button.today{font-weight:800}
+.planner-days>button:disabled{border:0;background:transparent}
+.planner-days>button i{position:absolute;bottom:3px;left:calc(50% - 3px);width:6px;height:6px;background:#2676dc;border-radius:50%}
+.planner-agenda{display:grid;gap:12px}
+.planner-agenda h2{font-size:18px;margin:0}
+.planner-task{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e7edf4;padding:10px 0;gap:8px}
+.planner-task label{display:flex;align-items:center;gap:12px;flex:1}
+.planner-task label span{display:grid;gap:5px}
+.planner-task small{font-size:12px;color:#728198}
+.planner-task input{width:18px;height:18px}
+.planner-task>button{min-width:34px}
+.planner-add{display:grid;gap:10px;border-top:1px solid #edf0f6;padding-top:12px}
+.planner-add h3{margin:0;font-size:16px}
+@media(max-width:900px){
+ .planner-layout{grid-template-columns:minmax(0,1fr)}
+ .planner-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .home-grid,.home-shortcuts{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:700px){
+ body{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
+ main.app-shell{width:100%;padding:10px 12px 30px}
+ .app-header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:12px 0 14px}
+ .app-header .brand{min-width:0}
+ .app-header .brand b{font-size:16px;white-space:normal}
+ .app-header .brand small{font-size:10px}
+ .app-header .header-actions{grid-column:2;grid-row:1;gap:5px}
+ .app-header .user-nav{position:fixed!important;bottom:0!important;left:0!important;right:0!important;top:auto!important;
+   width:100%!important;max-width:100%!important;display:flex;align-items:stretch;justify-content:space-around;gap:0!important;
+   padding:6px 4px calc(7px + env(safe-area-inset-bottom,0px))!important;margin:0!important;
+   background:#fff!important;border-top:1px solid #dce6f5!important;border-radius:0!important;
+   box-shadow:0 -5px 19px #18345b1a!important;z-index:75;overflow-x:auto}
+ .app-header .user-nav button{flex:1 0 auto;min-width:50px;max-width:100px;padding:7px 4px!important;
+   display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px!important;
+   font-size:10px!important;line-height:1.2;white-space:nowrap;border-bottom:0!important;border-radius:9px}
+ .app-header .user-nav button>span{display:block!important}
+ .app-header .user-nav button>span .line-icon{width:20px;height:20px}
+ .app-header .user-nav button.active{background:#eaf2ff!important;color:#1763c2!important}
+ .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ .metric-card{padding:12px!important}
+ .metric-card b{font-size:19px}
+ .home-grid{grid-template-columns:minmax(0,1fr)}
+ .home-shortcuts{grid-template-columns:minmax(0,1fr)}
+ .home-shortcut{padding:14px;min-height:85px}
+ .home-hero,.continue-card,.performance-card,.focus-home{max-width:100%;width:100%;padding:16px!important}
+ .home-hero h1{font-size:23px;overflow-wrap:anywhere}
+ .performance-summary{display:flex;flex-wrap:wrap;gap:10px}
+ .performance-summary>span{min-width:0;flex:1 1 120px}
+ .cycle-bar-chart{width:100%;gap:4px;padding:14px 4px 0}
+ .cycle-bar i{width:min(24px,100%)}
+ .study-filters,.cycle-setup .study-filters,.filter-row{grid-template-columns:minmax(0,1fr)!important}
+ .user-home,.planner-page,.edital-creator{width:100%;min-width:0}
+ .edital-topic,.edital-add{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 49px 36px;gap:5px}
+ .edital-topic input,.edital-add input{font-size:12px;padding:6px!important}
+ .edital-add button{font-size:11px;min-height:44px;padding:4px}
+ .edital-topic-header h2{font-size:17px}
+ .planner-page .card,.edital-creator{padding:14px!important}
+ .planner-summary{gap:9px}
+ .planner-month-head h2{font-size:16px}
+ .planner-days{gap:3px}
+ .planner-days>button{font-size:12px;border-radius:6px}
+ .notification-panel{max-height:calc(100dvh - 95px)}
+ .batch-table-wrap,.admin-content table{overflow-x:auto}
+}

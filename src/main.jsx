@@ -8,6 +8,8 @@ import { AiProviderSettings } from "./ai-settings";
 import { useNotebooks, NotebookWelcome, NotebookSwitcher } from "./notebooks";
 import { RevengeMode } from "./revenge";
 import { NotificationCenter } from "./notifications";
+import { ProvisionalCreator } from "./provisional";
+import { StudyPlanner } from "./study-planner";
 import { REVANCHE_ICON_PNG } from "./revenge-icon-png";
 import "./styles.css";
 
@@ -514,6 +516,12 @@ function App() {
   }
   function openUser(target = "inicio") { setArea("user"); setTab(target); }
   function openRevenge(id = "") { setRevengeCycleId(id); setArea("user"); setTab("revanche"); }
+  function openEdict() { setArea("user"); setTab("edital"); }
+  async function edictCreated(result) {
+    await notebooks.refresh(result.notebook_id);
+    setArea("user");setTab("inicio");
+    setNotice(`Caderno provisório criado com ${result.matched_questions || 0} questão(ões) compatível(is).`);
+  }
   async function navigateNotification(destination, notebookId, details = {}) {
     if (notebookId && notebookId !== notebooks.notebook?.id) {
       const book = notebooks.catalog.find((item) => item.id === notebookId);
@@ -550,7 +558,7 @@ function App() {
       <header className="app-header">
         <button className="brand" onClick={() => openUser("inicio")}><span className="brand-mark">✓</span><span><b>Caderno de Questões</b><small>Estude. Resolva. Evolua.</small></span></button>
         <div className="header-actions"><NotificationCenter key={session.user.id} supabase={supabase} userId={session.user.id} onNavigate={navigateNotification} /><details className="profile-menu" onMouseLeave={(event) => event.currentTarget.removeAttribute("open")}><summary><span className="avatar">{(profile?.display_name || profile?.email || session.user.email || "U")[0].toUpperCase()}</span><span className="profile-name">{profile?.display_name || (profile?.email || session.user.email || "").split("@")[0]}</span><span>⌄</span></summary><div><button onClick={() => openUser("perfil")}>Minha conta</button><button onClick={() => openUser("perfil")}>Preferências</button>{isAdmin && <button onClick={() => openAdmin()}>Painel administrativo</button>}<button onClick={() => supabase.auth.signOut()}>Sair</button></div></details></div>
-        {area === "user" && <nav className="user-nav">{[["inicio", "home", "Início"], ["estudos", "document", "Questões"], ["revanche", "cycle", "Revanche"], ["discursivas", "pen", "Discursivas"], ["desempenho", "bars", "Desempenho"], ["perfil", "settings", "Perfil"]].map(([id, icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><span aria-hidden="true"><LineIcon name={icon} /></span>{label}</button>)}</nav>}
+        {area === "user" && <nav className="user-nav">{[["inicio", "home", "Início"], ["estudos", "document", "Questões"], ["revanche", "cycle", "Revanche"], ["discursivas", "pen", "Discursivas"], ["desempenho", "bars", "Desempenho"], ["planejamento", "timer", "Planejamento"], ["perfil", "settings", "Perfil"]].map(([id, icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><span aria-hidden="true"><LineIcon name={icon} /></span>{label}</button>)}</nav>}
       </header>
       {notice && (
         <div className="notice">
@@ -558,13 +566,14 @@ function App() {
           <button onClick={() => setNotice("")}>×</button>
         </div>
       )}
-      {area === "user" ? <>{!notebooks.notebook ? <NotebookWelcome state={notebooks} /> : <><NotebookSwitcher state={notebooks} />
+      {area === "user" ? <>{tab === "edital" ? <ProvisionalCreator supabase={supabase} userId={session.user.id} questions={questions} onCreated={edictCreated} onCancel={() => setTab("inicio")} /> : !notebooks.notebook ? <NotebookWelcome state={notebooks} onCreate={openEdict} /> : <><NotebookSwitcher state={notebooks} onCreate={openEdict} />
         {tab === "inicio" && <UserHome questions={userQuestions} notebookId={notebooks.notebook.id} userId={session.user.id} name={profile?.display_name} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} goPerformance={() => setTab("desempenho")} goChallenge={() => setTab("desafio")} goRevenge={() => openRevenge()} />}
         <div hidden={tab !== "estudos"}><Study key={notebooks.notebook.id} questions={userQuestions} notebookId={notebooks.notebook.id} supabase={supabase} userId={session.user.id} onRevenge={openRevenge} /></div>
         {tab === "revanche" && <RevengeMode key={notebooks.notebook.id} supabase={supabase} userId={session.user.id} notebookId={notebooks.notebook.id} initialCycleId={revengeCycleId} onBack={() => setTab("estudos")} />}
         {tab === "discursivas" && <EssayStudy key={notebooks.notebook.id} supabase={supabase} userId={session.user.id} notebookId={notebooks.notebook.id} essayIds={notebooks.essayIds} />}
         {tab === "desafio" && <DailyChallenge supabase={supabase} onBack={() => setTab("inicio")} onRanking={() => setTab("desempenho")} />}
         {tab === "desempenho" && <Performance questions={userQuestions} notebookId={notebooks.notebook.id} userId={session.user.id} supabase={supabase} goStudy={() => setTab("estudos")} />}
+        {tab === "planejamento" && <StudyPlanner key={notebooks.notebook.id} supabase={supabase} userId={session.user.id} notebookId={notebooks.notebook.id} questions={userQuestions} />}
         {tab === "perfil" && <UserProfile profile={profile} session={session} supabase={supabase} onProfileSaved={(values) => setProfile((current) => ({ ...current, ...values }))} />}
       </>}</> : isAdmin ? <section className="admin-layout"><AdminSidebar adminTab={adminTab} setAdminTab={setAdminTab} openUser={openUser} /><div className="admin-content">{adminTab === "overview" && <AdminOverview questions={questions} supabase={supabase} />}{adminTab === "cadastro" && cadastroContent}{adminTab === "questoes" && <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} supabase={supabase} />}{adminTab === "essay-cadastro" && <EssayAdmin supabase={supabase} />}{adminTab === "essay-library" && <EssayLibrary supabase={supabase} />}{adminTab === "desafios" && <ChallengeAdmin supabase={supabase} />}{adminTab === "creditos" && <CorrectionCreditsAdmin supabase={supabase} />}{adminTab === "sistema2" && <System2Home openCadastro={() => setAdminTab("sistema2-cadastro")} openFilter={() => setAdminTab("sistema2-filter")} openContent={() => setAdminTab("sistema2-content")} />}{adminTab === "sistema2-cadastro" && <System2Cadastro supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "sistema2-filter" && <System2Filter supabase={supabase} onBack={() => setAdminTab("sistema2")} openContent={() => setAdminTab("sistema2-content")} />}{adminTab === "sistema2-content" && <System2Content supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "sistema2-test" && <System2Test supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "ai-providers" && <AiProviderSettings supabase={supabase} />}</div></section> : <section className="card"><h2>Acesso restrito</h2><p>Esta área é exclusiva para administradores.</p><button onClick={() => openUser("inicio")}>Voltar ao início</button></section>}
     </main>

@@ -66,7 +66,7 @@ Deno.serve(async (request) => {
       const { data: profile } = await admin.from("profiles").select("role").eq("id", authData.user.id).maybeSingle();
       if (profile?.role !== "admin") return json({ error:"Acesso restrito ao administrador." }, 403);
     }
-    const { data: claimData, error: claimError } = await admin.rpc("claim_system2_ai_question", { p_trigger:isScheduled ? "scheduled" : "manual", p_question_id:body?.question_id || null });
+    const { data: claimData, error: claimError } = await admin.rpc("claim_system2_full_question", { p_trigger:isScheduled ? "scheduled" : "manual", p_question_id:body?.question_id || null });
     if (claimError) throw claimError;
     claimed = claimData;
     if (!claimed?.claimed) return json(claimed || { claimed:false, reason:"Nenhuma questão disponível." });
@@ -74,7 +74,9 @@ Deno.serve(async (request) => {
     if (sourceError || !source) throw new Error("A questão selecionada não foi encontrada.");
     const { data: providers } = await admin.from("ai_provider_settings").select("first_pass_provider,reasoning_provider").eq("id",true).single();
     const question = { number:source.question_number, statement:source.statement, alternatives:source.alternatives, correct_option:source.answer_key_option, metadata:source.import || {} };
-    const stage = Number(source.ai_stage || 0) + 1;
+    const stages: Array<Record<string, unknown>> = [];
+    const initialStage = Number(source.ai_stage || 0) + 1;
+    for (let stage = initialStage; stage <= 3; stage++) {
     const providerForStage = stage === 1 ? (providers?.first_pass_provider || "groq") : (providers?.reasoning_provider || "gemini");
     let patch: Record<string, unknown> = {}, summary: Record<string, unknown> = { stage, provider:providerForStage };
     if (stage === 1) {
@@ -97,17 +99,33 @@ Deno.serve(async (request) => {
       patch = { correct_answer_explanation:String(result.correct_answer_explanation || "").trim() || source.correct_answer_explanation || null, ai_confidence:confidence, ai_stage:3, analysis_steps:{ ...(source.analysis_steps || {}), classification:"complete", wrong_options:"complete", correct_answer:"complete" }, ai_result:{ stage_1:source.ai_result?.stage_1 || {}, stage_2:source.ai_result?.stage_2 || {}, stage_3:result }, status:finalStatus, ai_processed_at:new Date().toISOString(), ai_last_error:null };
       summary = { stage, confidence, final_status:finalStatus };
     }
-    const { error:updateError } = await admin.from("questions_v2").update(patch).eq("id", source.id);
-    if (updateError) throw updateError;
-    await admin.from("system2_ai_runs").update({ status:stage === 3 ? String(patch.status) : "processing", finished_at:new Date().toISOString(), result_summary:summary }).eq("id", claimed.run_id);
-    return json({ claimed:true, question_id:source.id, question_number:source.question_number, stage, status:patch.status, progress:stage * 33.33 });
+    // Persistir cada etapa ANTES de começar a próxima. A análise incompleta
+    // retoma da última etapa salva após qualquer falha ou queda da função.
+    const { data: saved, error:updateError } = await admin.from("questions_v2")
+      .update(patch).eq("id",source.id).eq("ai_stage",stage-1).select("id").maybeSingle();
+    if (updateError || !saved) throw new Error(updateError?.message || "O estado da questão mudou durante a análise.");
+    Object.assign(source,patch);
+    stages.push({ stage, provider:providerForStage, ...summary });
+    }
+    // O intervalo entre questões começa SOMENTE após a etapa 3.
+    const { data: released, error: finishError } = await admin.rpc("finish_system2_full_question", {
+      p_question_id:source.id, p_run_id:claimed.run_id,
+      p_run_status:String(source.status), p_summary:{ starting_stage:initialStage, stages },
+      p_error:null,
+    });
+    if (finishError || !released) throw new Error(finishError?.message || "Não foi possível liberar a fila após concluir a questão.");
+    return json({ claimed:true, question_id:source.id,question_number:source.question_number,
+      starting_stage:initialStage,stage:3,status:source.status,progress:100,stages });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro inesperado no Filtro de IA.";
     if (claimed?.question_id) {
       const transient = /(high demand|temporar|429|resource[ _-]?exhausted|try again later|unavailable|quota|rate.?limit)/i.test(message);
       const retryAt = new Date(Date.now() + 10 * 60_000).toISOString();
       await admin.from("questions_v2").update(transient ? { status:"pending_ai", ai_last_error:message, next_attempt_at:retryAt } : { status:"needs_review", ai_last_error:message }).eq("id", claimed.question_id);
-      if (claimed.run_id) await admin.from("system2_ai_runs").update({ status:"failed", finished_at:new Date().toISOString(), error_message:message }).eq("id", claimed.run_id);
+      if (claimed.run_id) await admin.rpc("finish_system2_full_question", {
+        p_question_id:claimed.question_id,p_run_id:claimed.run_id,p_run_status:"failed",
+        p_summary:{ failed_stage:claimed.starting_stage,mode:"complete_question" },p_error:message,
+      });
     }
     return json({ error:message, question_id:claimed?.question_id || null }, 500);
   }

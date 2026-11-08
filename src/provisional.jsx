@@ -32,7 +32,10 @@ function overviewText(pages){
  return [...indices].sort((a,b)=>a-b).map(i=>"\n[PÁGINA "+(i+1)+"]\n"+pages[i]).join("\n").slice(0,65000);
 }
 function syllabusText(pages){
- const start=pages.findIndex(p=>/ANEXO II\s*[–-]\s*DOS CONTEÚDOS PROGRAMÁTICOS/i.test(p));
+ let start=-1;
+ for(let i=pages.length-1;i>=0;i--){
+   if(/^\s*ANEXO II\s*[–-]\s*DOS CONTEÚDOS PROGRAMÁTICOS/im.test(pages[i])){start=i;break;}
+ }
  const after=start>=0?start:Math.max(0,pages.length-20);
  const end=pages.findIndex((p,i)=>i>after&&/ANEXO III\s*[–-]\s*DO CRONOGRAMA/i.test(p));
  const selected=pages.slice(after,end>after?end:Math.min(pages.length,after+20));
@@ -85,7 +88,9 @@ export function ProvisionalCreator({supabase,userId,questions=[],onCreated,onCan
      if(!collected.length)throw Error("Não foram identificadas matérias para esse cargo.");
      setSyllabus(data);setTopics(collected);
      if(!name.trim())setName(display(role.broad_name)||display(role.original_name));
-     const nextDate=parseISO(analysis?.exam_date)||asList(analysis?.timeline).map(e=>parseISO(e.date)).find(Boolean)||"";
+     const nextDate=parseISO(analysis?.exam_date)||asList(analysis?.timeline)
+       .filter(e=>/aplicaç[aã]o das provas|realizaç[aã]o das provas|prova objetiva/i.test(display(e.label)))
+       .map(e=>parseISO(e.date)).find(Boolean)||"";
      setExamDate(nextDate);setStep("confirm");
    }catch(err){setError(err.message);}finally{setBusy(false);}
  }

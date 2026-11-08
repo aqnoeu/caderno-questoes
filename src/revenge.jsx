@@ -26,7 +26,7 @@ async function requestRevenge(supabase, notebookId, cycleId, action, extra = {})
 
 // Negrito seguro, sem interpretar HTML de textos cadastrados.
 function ChatText({ text }) {
-  return String(text || "").split(/(\\*\\*[^*\\n]+\\*\\*)/g).map((part, index) =>
+  return String(text || "").split(/(\*\*[^*\n]+\*\*)/g).map((part, index) =>
     part.startsWith("**") && part.endsWith("**")
       ? <strong key={index}>{part.slice(2, -2)}</strong>
       : <React.Fragment key={index}>{part}</React.Fragment>,

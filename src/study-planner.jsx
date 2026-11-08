@@ -1,4 +1,5 @@
 import React from "react";
+import { GuidedPlanner } from "./guided-planning";
 
 function localISO(date) {
   const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,"0"),d=String(date.getDate()).padStart(2,"0");
@@ -36,6 +37,7 @@ export function StudyPlanner({supabase,userId,notebookId,questions}) {
   const [selected,setSelected]=React.useState("");
   const [name,setName]=React.useState("Meu planejamento");
   const [examDate,setExamDate]=React.useState("");
+  const [editalDate,setEditalDate]=React.useState("");
   const [target,setTarget]=React.useState(60);
   const [month,setMonth]=React.useState(()=>new Date(new Date().getFullYear(),new Date().getMonth(),1));
   const [date,setDate]=React.useState(()=>dayKey(new Date()));
@@ -58,9 +60,9 @@ export function StudyPlanner({supabase,userId,notebookId,questions}) {
   React.useEffect(()=>{
     let active=true;
     setEditalTopics([]);
-    supabase.from("provisional_notebook_specs").select("topics").eq("notebook_id",notebookId)
+    supabase.from("provisional_notebook_specs").select("topics,exam_date").eq("notebook_id",notebookId)
       .maybeSingle().then(({data})=>{
-        if(active) setEditalTopics(Array.isArray(data?.topics)?data.topics:[]);
+        if(active){setEditalTopics(Array.isArray(data?.topics)?data.topics:[]);setEditalDate(data?.exam_date||"");}
       });
     return()=>{active=false;};
   },[supabase,notebookId]);
@@ -165,13 +167,8 @@ export function StudyPlanner({supabase,userId,notebookId,questions}) {
       {plans.length>0&&<select aria-label="Planejamento" value={selected} onChange={e=>setSelected(e.target.value)}>
         {plans.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
     </div>
-    {!plan&&<form className="card planner-create" onSubmit={createPlan}>
-      <h2>Comece seu plano de estudos</h2>
-      <label>Nome<input required maxLength="120" value={name} onChange={e=>setName(e.target.value)}/></label>
-      <label>Data da prova (opcional)<input type="date" value={examDate} onChange={e=>setExamDate(e.target.value)}/></label>
-      <label>Meta diária em minutos<input type="number" min="10" max="720" value={target} onChange={e=>setTarget(e.target.value)}/></label>
-      <button disabled={busy}>Criar planejamento</button>
-    </form>}
+    {!plan&&<GuidedPlanner key={notebookId} supabase={supabase} userId={userId}
+      notebookId={notebookId} editalTopics={editalTopics} questions={questions} onSaved={()=>reload()}/>}
     {plan&&<>
       <div className="planner-summary">
         <article className="card"><small>Atividades concluídas</small><b>{completed}/{tasks.length}</b></article>

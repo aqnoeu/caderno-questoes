@@ -110,11 +110,12 @@ function parseQuestionsV2(text) {
 
 const emptyMetadata = { concurso: "", edicao: "", ano: "", banca: "", cargo: "", application_date: "" };
 
-export async function resolveNotebookV63(supabase, concurso, cargo, subjects = []) {
+export async function resolveNotebookV63(supabase, concurso, cargo, subjects = [], incomingCount = 0) {
   const { data, error } = await supabase.rpc("notebook_resolve_v63", {
     p_concurso: String(concurso || "").trim(),
     p_cargo: String(cargo || "").trim(),
     p_subjects: [...new Set(subjects.map((s) => String(s || "").trim()).filter(Boolean))],
+    p_expected_count: Number(incomingCount) || 0,
   });
   if (error) throw error;
   if (!data?.notebook_id) throw new Error("Não foi possível identificar o caderno de destino.");
@@ -372,7 +373,7 @@ export function System2Cadastro({ supabase, onBack }) {
     if (chosen.some((item) => item.correct_option !== "*" && !item.alternatives.some((option) => option.letter === item.correct_option))) return setNotice("Há gabaritos incompatíveis com as alternativas. Confira antes de salvar.");
     setBusy(true); setNotice("");
     try {
-      const destination = await resolveNotebookV63(supabase, metadata.concurso, metadata.cargo, routingSubjects.split(/[;,·]/));
+      const destination = await resolveNotebookV63(supabase, metadata.concurso, metadata.cargo, routingSubjects.split(/[;,·]/), chosen.length);
       const { data: imported, error: importError } = await supabase.from("question_imports").insert({ file_name:file?.name || "prova.pdf", concurso:metadata.concurso.trim(), edicao:metadata.edicao.trim() || null, ano:Number(metadata.ano), banca:metadata.banca.trim(), notebook_id:destination.notebook_id, cargo:metadata.cargo.trim() || null, application_date:metadata.application_date || null, total_extracted:drafts.length, total_selected:chosen.length, import_metadata:{ page_count:info?.pageCount || 0, removed_repeated_layout_lines:info?.removedLayoutLines || 0 } }).select("id").single();
       if (importError) throw importError;
       const rows = chosen.map((item) => ({ import_id:imported.id, question_number:item.question_number, statement:item.statement.trim(), alternatives:item.alternatives, answer_key_option:item.correct_option || null, extraction_warnings:item.warnings, status:"pending_ai", source_page_range:null, raw_payload:{ imported_file:file?.name || null } }));

@@ -55,7 +55,10 @@ begin
   select * into item from public.questions_v2
    where status in ('pending_ai','processing_ai') and ai_stage<3
     and (next_attempt_at is null or next_attempt_at<=now())
-   order by case when ai_stage>0 then 0 else 1 end,created_at asc
+   order by case when ai_stage>0 then 0 else 1 end,
+    (select min(r.started_at) from public.system2_ai_runs r
+      where r.question_id=questions_v2.id) asc nulls last,
+    created_at asc,question_number asc,id asc
    for update skip locked limit 1;
  end if;
  if not found then return jsonb_build_object('claimed',false,'reason','Nenhuma questão pronta para análise'); end if;

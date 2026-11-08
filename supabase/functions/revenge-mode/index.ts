@@ -1,7 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash";
 const answer = (request, body, status = 200) => {
   const origin = request.headers.get("Origin") || "";
   const allowed =
@@ -24,11 +23,12 @@ const json = (v) =>
       .replace(/^`{3}(?:json)?\s*/i, "")
       .replace(/\s*`{3}$/, ""),
   );
-async function groq(prompt) {
+async function groq(prompt, purpose = "generation") {
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw Error("Groq não configurado.");
   const strict = GROQ_MODEL.startsWith("openai/gpt-oss");
-  const schema = {
+  const reviewing = purpose === "verification";
+  const statementSchema = {
     type: "object",
     additionalProperties: false,
     properties: {
@@ -48,7 +48,14 @@ async function groq(prompt) {
     },
     required: ["statements"],
   };
-  let last = "Groq não conseguiu gerar as afirmações.";
+  const reviewSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: { approved: { type: "boolean" }, reason: { type: "string" } },
+    required: ["approved", "reason"],
+  };
+  const schema = reviewing ? reviewSchema : statementSchema;
+  let last = reviewing ? "Groq não conseguiu revisar as afirmações." : "Groq não conseguiu gerar as afirmações.";
   for (let attempt = 0; attempt < 2; attempt++) {
     const structured = strict && attempt === 0;
     const controller = new AbortController();
@@ -60,19 +67,21 @@ async function groq(prompt) {
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
         body: JSON.stringify({
           model: GROQ_MODEL,
-          temperature: 0.12,
+          temperature: reviewing ? 0 : 0.12,
           ...(strict ? { include_reasoning: false } : {}),
           response_format: structured
             ? {
                 type: "json_schema",
-                json_schema: { name: "revenge_statements", strict: true, schema },
+                json_schema: { name: reviewing ? "revenge_validation" : "revenge_statements", strict: true, schema },
               }
             : { type: "json_object" },
           messages: [
             {
               role: "system",
               content:
-                "Você é um professor de Direito brasileiro. Responda exclusivamente em JSON válido, sem inventar normas.",
+                reviewing
+                  ? "Você é um revisor jurídico brasileiro independente. Verifique criticamente cada resposta, rejeite erros, ambiguidades ou fundamentos não comprovados. Retorne apenas JSON válido."
+                  : "Você é um professor de Direito brasileiro. Responda exclusivamente em JSON válido, sem inventar normas.",
             },
             { role: "user", content: prompt },
           ],
@@ -110,34 +119,6 @@ async function groq(prompt) {
     }
   }
   throw Error(last);
-}
-async function gemini(prompt) {
-  const key = Deno.env.get("GEMINI_API_KEY");
-  if (!key) throw Error("Gemini não configurado.");
-  const r = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0.03 },
-      }),
-    },
-  );
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok)
-    throw Error(
-      "Gemini (" +
-        r.status +
-        "): " +
-        String(j.error?.message || "Serviço indisponível.").slice(0, 280),
-    );
-  try {
-    return json(j.candidates?.[0]?.content?.parts?.[0]?.text);
-  } catch {
-    throw Error("Gemini respondeu fora do formato JSON esperado. Tente gerar novamente.");
-  }
 }
 const publicState = (session, item) => {
   const index = session.current_index || 0,
@@ -335,16 +316,17 @@ Deno.serve(async (request) => {
           { error: "Groq não criou duas afirmações válidas. Tente novamente." },
           422,
         );
-      const review = await gemini(
+      const review = await groq(
         'Verifique independentemente se CADA afirmação está correta ou incorreta como indicada, se as explicações são juridicamente exatas, não ambíguas, não inventadas e se corrigem o erro de raciocínio. Rejeite se qualquer uma for duvidosa. Retorne JSON {"approved":true,"reason":"..."}. CONTEXTO:' +
           JSON.stringify(context) +
           " AFIRMAÇÕES:" +
           JSON.stringify(pair),
+        "verification",
       );
-      if (review.approved !== true)
+      if (review.approved !== true || typeof review.reason !== "string" || !review.reason.trim())
         return answer(
           request,
-          { error: "O Gemini rejeitou a validação jurídica. Tente novamente." },
+          { error: "A segunda análise do Groq não aprovou as afirmações. Tente novamente." },
           422,
         );
       const { error: writeError } = await db.from("revenge_items").upsert(
@@ -352,7 +334,7 @@ Deno.serve(async (request) => {
           session_id: session.id,
           question_id: questionId,
           statements: pair,
-          provider_info: { generator: "groq", validator: "gemini" },
+          provider_info: { generator: "groq", validator: "groq", validation_mode: "separate_request" },
         },
         { onConflict: "session_id,question_id", ignoreDuplicates: true },
       );

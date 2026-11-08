@@ -44,8 +44,9 @@ async function groq(prompt) {
     }),
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw Error(j.error?.message || "Groq indisponível.");
-  return json(j.choices?.[0]?.message?.content);
+  if (!r.ok) throw Error("Groq (" + r.status + "): " + String(j.error?.message || "Serviço indisponível.").slice(0,280));
+  try { return json(j.choices?.[0]?.message?.content); }
+  catch { throw Error("Groq respondeu fora do formato JSON esperado. Tente gerar novamente."); }
 }
 async function gemini(prompt) {
   const key = Deno.env.get("GEMINI_API_KEY");
@@ -62,8 +63,9 @@ async function gemini(prompt) {
     },
   );
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw Error(j.error?.message || "Gemini indisponível.");
-  return json(j.candidates?.[0]?.content?.parts?.[0]?.text);
+  if (!r.ok) throw Error("Gemini (" + r.status + "): " + String(j.error?.message || "Serviço indisponível.").slice(0,280));
+  try { return json(j.candidates?.[0]?.content?.parts?.[0]?.text); }
+  catch { throw Error("Gemini respondeu fora do formato JSON esperado. Tente gerar novamente."); }
 }
 const publicState = (session, item) => {
   const index = session.current_index || 0,
@@ -337,6 +339,9 @@ Deno.serve(async (request) => {
     }
     return answer(request, publicState(session, item));
   } catch (e) {
-    return answer(request, { error: e instanceof Error ? e.message : "Falha na Revanche." }, 500);
+    const detail = e instanceof Error ? e.message : "Falha inesperada na Revanche.";
+    console.error("revenge-mode:", detail);
+    const providerFailure = /^(Groq|Gemini)\b/.test(detail);
+    return answer(request, { error: detail, retryable: providerFailure }, providerFailure ? 502 : 500);
   }
 });

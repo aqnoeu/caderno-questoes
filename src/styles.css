@@ -912,3 +912,9 @@ button.annulled {
 .revenge-review-actions{display:grid;gap:10px}
 .revenge-review-actions .light{border:1px solid #c8d4e7;border-radius:11px}
 .revenge-review-actions p{margin:0;color:#83513b;font-size:13px}
+
+/* v64.3 — Remetente e ênfase em conversa. */
+.revenge-bubble .revenge-sender{font-size:12px;font-weight:700;line-height:1.2;color:#54759f}
+.revenge-message-user .revenge-sender{color:#e4edff}
+.revenge-bubble span strong{font-size:inherit;font-weight:700;color:#2258a4}
+.revenge-message-user .revenge-bubble span strong{color:inherit}

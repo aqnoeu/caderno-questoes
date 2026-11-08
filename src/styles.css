@@ -978,7 +978,7 @@ body{overflow-x:hidden}
 .edital-form details summary{cursor:pointer}
 .edital-form details textarea{margin:10px 0;min-height:120px}
 .edital-topics{display:grid;gap:8px;max-height:340px;overflow:auto}
-.edital-topic,.edital-add{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:center;gap:8px}
+.edital-topic,.edital-add{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 75px auto;align-items:center;gap:8px}
 .edital-topic>button{min-width:43px;min-height:43px}
 .edital-expand{display:flex;align-items:flex-start;gap:10px;font-size:14px}
 .edital-expand input{width:18px;height:18px;flex:none}
@@ -1053,7 +1053,7 @@ body{overflow-x:hidden}
  .cycle-bar i{width:min(24px,100%)}
  .study-filters,.cycle-setup .study-filters,.filter-row{grid-template-columns:minmax(0,1fr)!important}
  .user-home,.planner-page,.edital-creator{width:100%;min-width:0}
- .edital-topic,.edital-add{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;gap:5px}
+ .edital-topic,.edital-add{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 49px 36px;gap:5px}
  .edital-topic input,.edital-add input{font-size:12px;padding:6px!important}
  .edital-add button{font-size:11px;min-height:44px;padding:4px}
  .edital-topic-header h2{font-size:17px}

@@ -103,12 +103,14 @@ export async function parseOabAnswerKeyPdf(file, pdfjs) {
 }
 
 export function detectExamType(text) {
-  const source = String(text || "");
+  // Apenas cabeçalhos do início da prova: não inferir o tipo de uma questão
+  // que mencione "tipo 1" dentro do enunciado jurídico.
+  const source = String(text || "").slice(0, 4500);
   const matches = [
     ...source.matchAll(
-      /\b(?:PROVA|CADERNO)\s+(?:DE\s+)?(?:TIPO\s*)?([1-4])\b|\bTIPO\s*(?:DE\s+PROVA\s*)?([1-4])\b/gi,
+      /^\s*(?:PROVA\s+TIPO|TIPO\s+(?:DE\s+PROVA\s*)?|CADERNO\s+(?:DE\s+PROVA\s+)?TIPO)\s*[:\-]?\s*([1-4])\b/gim,
     ),
-  ].map((match) => String(Number(match[1] || match[2])));
+  ].map((match) => String(Number(match[1])));
   const found = [...new Set(matches)];
   return found.length === 1 ? found[0] : null;
 }

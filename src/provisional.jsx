@@ -13,15 +13,18 @@ export function parseEdict(text) {
   const found = []; let current = null;
   for (const line of lines) {
     const heading = line.replace(/^(?:\d+(?:\.\d+)*\s*[-.)]?\s*)/, "");
-    if (heading.length < 100 && HEADINGS.some((rule) => rule.test(heading))) {
-      const parts = heading.split(/\s*[:–—]\s*/, 2);
+    const weightMatch = heading.match(/(?:peso\s*[:=]?\s*(\d+))|(?:(\d+)\s*questões)/i);
+    const weight = weightMatch ? Number(weightMatch[1] || weightMatch[2]) || 1 : 1;
+    const headingWithoutWeight = heading.replace(/(?:\(?\bpesos?\s*[:=]?\s*\d+\)?)|(?:\(?\b\d+\s*questões\b\)?)/ig, "").trim();
+    if (headingWithoutWeight.length < 100 && HEADINGS.some((rule) => rule.test(headingWithoutWeight))) {
+      const parts = headingWithoutWeight.split(/\s*[:–—]\s*/, 2);
       current = clean(parts[0]).replace(/\.$/, "");
       if (current.length > 90) current = current.slice(0,90);
       if (current && !found.some((row) => normalized(row.discipline) === normalized(current) && !row.subject))
-        found.push({ discipline: current, subject: "", weight: 1 });
+        found.push({ discipline: current, subject: "", weight });
       if (parts[1] && parts[1].length < 180) {
         for (const sub of parts[1].split(/\s*[;•]\s*/).map(clean).filter((v) => v.length > 3 && v.length < 160).slice(0,12))
-          found.push({ discipline: current, subject: sub, weight: 1 });
+          found.push({ discipline: current, subject: sub, weight });
       }
     } else if (current && line.length < 155 && /^[\d]+[.)]\s+|^[•\-]\s+/.test(line)) {
       const subject = clean(line.replace(/^(?:\d+[.)]|[•-])\s*/, ""));
@@ -82,7 +85,7 @@ export function ProvisionalCreator({ supabase, userId, questions = [], onCreated
     const discipline=clean(newDiscipline), subject=clean(newSubject);
     if (!discipline) return setError("Informe ao menos a disciplina.");
     if (topics.some(t=>normalized(t.discipline)===normalized(discipline)&&normalized(t.subject)===normalized(subject))) return;
-    setTopics(current=>[...current,{discipline,subject,weight:1}]);
+    setTopics(current=>[...current.filter(item => !subject || item.subject || normalized(item.discipline)!==normalized(discipline)),{discipline,subject,weight:1}]);
     setNewSubject("");setError("");
   }
   function previewMatches() {
@@ -94,9 +97,10 @@ export function ProvisionalCreator({ supabase, userId, questions = [], onCreated
       const subject=normalized(topic.subject);
       const hits=questions.filter(q=>{
         if(q.is_hidden || q.is_annulled || q.correct_option==="*")return false;
-        if(normalized(q.discipline)!==expected)return false;
-        if(!subject)return true;
         const parts=String(q.subject||"").split(/[;|·•]/).map(normalized);
+        if(normalized(q.discipline)!==expected &&
+          !(normalized(q.discipline)==="direito" && parts.includes(expected)))return false;
+        if(!subject)return true;
         return parts.some(part=>part===subject || (expand && subject.length>=5 &&
           (part.startsWith(subject+" ") || subject.startsWith(part+" "))));
       });
@@ -115,7 +119,7 @@ export function ProvisionalCreator({ supabase, userId, questions = [], onCreated
     try {
       const {data,error:rpcError}=await supabase.rpc("create_provisional_notebook",{
         p_title:title.trim(),p_concurso:concurso.trim(),p_cargo:cargo.trim(),
-        p_topics:topics.map(({discipline,subject})=>({discipline:clean(discipline),subject:clean(subject)})),
+        p_topics:topics.map(({discipline,subject,weight})=>({discipline:clean(discipline),subject:clean(subject),weight:Math.max(1,Math.min(99,Number(weight)||1))})),
         p_expand_related:expand,p_source_filename:sourceFilename||null,p_exam_date:examDate||null,
       });
       if (rpcError) throw rpcError;
@@ -141,6 +145,7 @@ export function ProvisionalCreator({ supabase, userId, questions = [], onCreated
       <div className="edital-topics">{topics.map((topic,i)=><div className="edital-topic" key={i}>
         <input aria-label="Disciplina" value={topic.discipline} onChange={e=>{setTopics(rows=>rows.map((t,j)=>j===i?{...t,discipline:e.target.value}:t));setPreview(null);}} />
         <input aria-label="Assunto (opcional)" placeholder="Disciplina inteira" value={topic.subject||""} onChange={e=>{setTopics(rows=>rows.map((t,j)=>j===i?{...t,subject:e.target.value}:t));setPreview(null);}} />
+        <input type="number" min="1" max="99" aria-label="Peso da matéria" title="Peso identificado no edital (ajustável)" value={topic.weight||1} onChange={e=>{setTopics(rows=>rows.map((t,j)=>j===i?{...t,weight:Number(e.target.value)||1}:t));setPreview(null);}} />
         <button className="light" type="button" aria-label="Excluir matéria" onClick={()=>{setTopics(rows=>rows.filter((_,j)=>j!==i));setPreview(null);}}>×</button>
       </div>)}</div>
       <div className="edital-add"><input placeholder="Nova disciplina" value={newDiscipline} onChange={e=>setNewDiscipline(e.target.value)} /><input placeholder="Assunto (opcional)" value={newSubject} onChange={e=>setNewSubject(e.target.value)} /><button type="button" className="light" onClick={()=>{addTopic();setPreview(null);}}>Adicionar</button></div>

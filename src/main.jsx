@@ -1061,6 +1061,7 @@ function EssayAdmin({ supabase }) {
         const { data, error } = await supabase.functions.invoke("analyze-essays", { body: { questions: group.map(({ item }, index) => ({ index, question_number: item.question_number, statement: item.statement, answer_key_text: item.answer_key_text, discipline: item.discipline, question_type:item.question_type })), source_header:proofText.slice(0,2500), key_header:keyText.slice(0,2500) } });
         if (error) throw error;
         const results = data?.results || [];
+        setSubjectFocus(current => current || results.map(result => result.discipline).filter(Boolean).join("; "));
         const autoMeta = data?.metadata || {};
         if (start===0) {
           setContestCargo(current=>current||autoMeta.cargo||"");

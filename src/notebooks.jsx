@@ -20,7 +20,7 @@ export function useNotebooks(supabase, userId) {
       const [books, membershipsResult, objectiveLinks, essayLinks] = await Promise.all([
         supabase
           .from("study_notebooks")
-          .select("id,code,title,kind,visibility,source_concurso")
+          .select("id,code,title,kind,visibility,source_concurso,cargo,created_by")
           .order("title"),
         supabase
           .from("user_notebooks")
@@ -44,9 +44,9 @@ export function useNotebooks(supabase, userId) {
         ...(objectiveLinks.data || []).map((link) => link.notebook_id),
         ...(essayLinks.data || []).map((link) => link.notebook_id),
       ]);
-      const list = (books.data || []).filter((book) => populated.has(book.id)),
+      const list = (books.data || []).filter((book) => populated.has(book.id) || (book.kind === "provisional" && book.created_by === userId)),
         memberList = (membershipsResult.data || []).filter((member) =>
-          populated.has(member.notebook_id),
+          populated.has(member.notebook_id) || (books.data || []).some(book => book.id === member.notebook_id && book.kind === "provisional" && book.created_by === userId),
         );
       setCatalog(list);
       setMemberships(memberList);
@@ -121,10 +121,10 @@ export function useNotebooks(supabase, userId) {
     }
     await refresh();
   }
-  return { catalog, memberships, notebook, questionIds, essayIds, loading, message, open, remove };
+  return { catalog, memberships, notebook, questionIds, essayIds, loading, message, open, remove, refresh };
 }
 
-export function NotebookWelcome({ state }) {
+export function NotebookWelcome({ state, onCreate }) {
   return (
     <section className="card" style={{ maxWidth: 750, margin: "22px auto", padding: 26 }}>
       <span className="eyebrow">MEUS CADERNOS</span>
@@ -133,6 +133,7 @@ export function NotebookWelcome({ state }) {
         Escolha o seu primeiro caderno. Você poderá adicionar outros depois, até o limite de cinco,
         mantendo o progresso separado.
       </p>
+      <button type="button" className="light" onClick={onCreate}>Criar caderno pelo edital</button>
       {state.loading ? (
         <p>Carregando cadernos…</p>
       ) : (
@@ -155,7 +156,7 @@ export function NotebookWelcome({ state }) {
   );
 }
 
-export function NotebookSwitcher({ state }) {
+export function NotebookSwitcher({ state, onCreate }) {
   const [expanded, setExpanded] = React.useState(false);
   if (!state.notebook) return null;
   const joined = new Set(state.memberships.map((m) => m.notebook_id));
@@ -224,6 +225,7 @@ export function NotebookSwitcher({ state }) {
               )}
             </div>
           ))}
+        <button type="button" className="light" onClick={() => {setExpanded(false);onCreate();}}>Criar caderno pelo edital</button>
         </div>
       )}
       {state.message && <p className="form-message">{state.message}</p>}

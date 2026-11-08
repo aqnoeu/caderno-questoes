@@ -19,14 +19,13 @@ export function RevengeMode({supabase,userId,notebookId,initialCycleId,onBack}) 
   const [showMascot,setShowMascot]=React.useState(()=>localStorage.getItem("revenge-mascot-"+userId)!=="off");
   const [selected,setSelected]=React.useState(null);
   const readHistory=React.useCallback(async()=>{
-    const [{data:rows,error},{data:log,error:logError}]=await Promise.all([
+    const [{data:rows,error},log]=await Promise.all([
       supabase.from("study_cycles").select("id,completed_at,question_ids,progress,concurso,banca,ano,correct_count,wrong_count")
         .eq("user_id",userId).eq("notebook_id",notebookId).not("completed_at","is",null)
         .order("completed_at",{ascending:false}).limit(50),
       requestRevenge(supabase,notebookId,null,"history"),
     ]);
     if(error)throw error;
-    if(logError)throw logError;
     setCycles((rows||[]).filter(row=>row.progress?.includes("wrong")));
     setHistory(log.sessions||[]);
   },[supabase,userId,notebookId]);

@@ -24,11 +24,12 @@ async function readPdf(file){
  return pages;
 }
 function overviewText(pages){
- const indices=new Set([...Array(Math.min(8,pages.length)).keys()]);
- for(let i=0;i<pages.length;i++){
-   if(/\b(?:DAS PROVAS|DO CONCURSO|QUADRO DE VAGAS|DOS CARGOS|ANEXO III|CRONOGRAMA DE EXECUÇÃO)\b/i.test(pages[i]))indices.add(i);
- }
- for(let i=Math.max(0,pages.length-4);i<pages.length;i++)indices.add(i);
+ // Prioritize exact evidence: jobs, exam rules, official schedule (not mentions in the index).
+ const indices=new Set([...Array(Math.min(5,pages.length)).keys()]);
+ const examStart=pages.findIndex(p=>/^\s*(?:9|10)\.\s*(?:DAS PROVAS|DA PROVA DISCURSIVA)/im.test(p));
+ if(examStart>=0)for(let i=examStart;i<Math.min(pages.length,examStart+5);i++)indices.add(i);
+ const scheduleStart=pages.findIndex(p=>/^\s*ANEXO III\s*[–-]\s*DO CRONOGRAMA/im.test(p));
+ if(scheduleStart>=0)for(let i=scheduleStart;i<Math.min(pages.length,scheduleStart+3);i++)indices.add(i);
  return [...indices].sort((a,b)=>a-b).map(i=>"\n[PÁGINA "+(i+1)+"]\n"+pages[i]).join("\n").slice(0,65000);
 }
 function syllabusText(pages){

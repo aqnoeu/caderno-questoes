@@ -1084,6 +1084,7 @@ function EssayAdmin({ supabase }) {
         selected[0].concurso,
         contestCargo,
         [...subjectFocus.split(/[;,·]/), ...selected.flatMap(item => [item.discipline,...splitSubjects(item.subjects)])],
+        selected.length,
       );
       for (const item of selected) {
         const row = { statement: item.statement.trim(), question_number: Number(item.question_number) || null, discipline: item.discipline.trim() || null, subjects: formatSubjects(item.subjects), difficulty: item.difficulty, banca: item.banca.trim() || null, ano: item.ano ? Number(item.ano) : null, concurso: item.concurso.trim() || null, application_date: item.application_date || null, total_points: Number(item.total_points || 0), answer_key_text: item.answer_key_text.trim(), official_commentary: item.official_commentary.trim() || null, question_type:item.question_type||"discursive",source_file:proofName,metadata:{source:"importacao-v62",modalidade:item.question_type||"discursive",edicao:item.edicao||null} };

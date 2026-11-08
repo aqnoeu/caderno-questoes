@@ -30,8 +30,11 @@ export function parseEdict(text) {
     }
     if (found.length >= 100) break;
   }
-  return found.filter((row, index, list) => list.findIndex((x) =>
+  const distinct = found.filter((row, index, list) => list.findIndex((x) =>
     normalized(x.discipline) === normalized(row.discipline) && normalized(x.subject) === normalized(row.subject)) === index);
+  // Uma matéria com subassuntos específicos não deve abrir a busca para toda a disciplina.
+  return distinct.filter((row) => row.subject || !distinct.some((item) =>
+    item.subject && normalized(item.discipline) === normalized(row.discipline)));
 }
 
 async function readEdictPdf(file) {

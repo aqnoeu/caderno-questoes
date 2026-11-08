@@ -15,7 +15,9 @@ export function useNotebooks(supabase, userId) {
         return;
       }
       setLoading(true);
-      const [books, membershipsResult] = await Promise.all([
+      // Um caderno só aparece ao aluno quando possui questões publicadas
+      // (objetivas, discursivas ou peças práticas). Desafios diários não contam.
+      const [books, membershipsResult, objectiveLinks, essayLinks] = await Promise.all([
         supabase
           .from("study_notebooks")
           .select("id,code,title,kind,visibility,source_concurso")
@@ -25,14 +27,27 @@ export function useNotebooks(supabase, userId) {
           .select("notebook_id,last_opened_at")
           .eq("user_id", userId)
           .order("last_opened_at", { ascending: false }),
+        supabase.from("notebook_questions").select("notebook_id"),
+        supabase.from("notebook_essays").select("notebook_id"),
       ]);
-      if (books.error || membershipsResult.error) {
-        setMessage(books.error?.message || membershipsResult.error?.message);
+      if (books.error || membershipsResult.error || objectiveLinks.error || essayLinks.error) {
+        setMessage(
+          books.error?.message ||
+            membershipsResult.error?.message ||
+            objectiveLinks.error?.message ||
+            essayLinks.error?.message,
+        );
         setLoading(false);
         return;
       }
-      const list = books.data || [],
-        memberList = membershipsResult.data || [];
+      const populated = new Set([
+        ...(objectiveLinks.data || []).map((link) => link.notebook_id),
+        ...(essayLinks.data || []).map((link) => link.notebook_id),
+      ]);
+      const list = (books.data || []).filter((book) => populated.has(book.id)),
+        memberList = (membershipsResult.data || []).filter((member) =>
+          populated.has(member.notebook_id),
+        );
       setCatalog(list);
       setMemberships(memberList);
       const selected =

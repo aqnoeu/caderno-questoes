@@ -120,7 +120,37 @@ async function groq(prompt, purpose = "generation") {
   }
   throw Error(last);
 }
-const publicState = (session, item) => {
+// Diagnóstico pré-existente do banco: o mascote não deve reinventar o erro.
+async function loadDiagnosis(db, cycle, questionId, userId, notebookId) {
+  const { data: q, error: questionError } = await db.from("questions")
+    .select("original_number,statement,alternatives,correct_option,central_rule,legal_basis,correct_answer_explanation,option_error_analysis")
+    .eq("id", questionId).maybeSingle();
+  if (questionError || !q) throw Error("Não foi possível recuperar a explicação da questão.");
+  const { data: mistake, error: mistakeError } = await db.from("answers")
+    .select("selected_option").eq("user_id",userId).eq("notebook_id",notebookId)
+    .eq("question_id",questionId).lte("answered_at",cycle.completed_at)
+    .order("answered_at",{ascending:false}).limit(1).maybeSingle();
+  if (mistakeError) throw mistakeError;
+  const selected = String(mistake?.selected_option || "").trim().toUpperCase();
+  const correct = String(q.correct_option || "").trim().toUpperCase();
+  const analysis = selected ? q.option_error_analysis?.[selected] || {} : {};
+  const options = Array.isArray(q.alternatives) ? q.alternatives : [];
+  const optionText = (letter) => {
+    const found=options.find((o)=>String(o?.letter||"").toUpperCase()===letter);
+    return String(found?.text || "").trim();
+  };
+  return {
+    number:q.original_number||null,selected_option:selected,selected_text:optionText(selected),
+    correct_option:correct,correct_text:optionText(correct),
+    mistake_type:String(analysis.mistake_type||"").trim(),
+    wrong_reasoning:String(analysis.wrong_reasoning||"").trim(),
+    student_feedback:String(analysis.student_feedback||"").trim(),
+    central_rule:String(q.central_rule||"").trim(),
+    legal_basis:String(q.legal_basis||"").trim(),
+    study_content:String(analysis.study_content||"").trim(),
+  };
+}
+const publicState = (session, item, diagnosis = null) => {
   const index = session.current_index || 0,
     done = session.state === "completed",
     attempt = item?.answers?.length || 0;
@@ -131,6 +161,7 @@ const publicState = (session, item) => {
     total_errors: session.question_ids.length,
     completed_errors: index,
     mastered_count: session.mastered_count,
+    diagnosis,
     perfect: done && session.mastered_count === session.question_ids.length,
     current: done
       ? null
@@ -238,6 +269,7 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (action === "generate") {
       if (item) return answer(request, publicState(session, item));
+
       const { data: q } = await db
         .from("questions")
         .select(
@@ -391,7 +423,8 @@ Deno.serve(async (request) => {
         finished: finished && session.current_index + 1 === session.question_ids.length,
       });
     }
-    return answer(request, publicState(session, item));
+    const diagnosis = await loadDiagnosis(db, cycle, questionId, user, notebook);
+    return answer(request, publicState(session, item, diagnosis));
   } catch (e) {
     const detail = e instanceof Error ? e.message : "Falha inesperada na Revanche.";
     console.error("revenge-mode:", detail);

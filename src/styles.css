@@ -825,3 +825,35 @@ button.annulled {
 @media (max-width: 780px) {
   .challenge-question-row > div.challenge-row-actions > button:last-child:nth-child(odd), .challenge-bulk-actions > button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
+
+
+/* v64 — Revanche integrada à identidade visual existente */
+.revenge-page{max-width:960px;margin:0 auto;display:grid;gap:20px}
+.revenge-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.revenge-head h1{margin:7px 0}
+.revenge-head p{margin:0;color:var(--muted,#687282)}
+.revenge-toggle{font-size:.85rem;display:flex;gap:9px;align-items:center;white-space:nowrap}
+.revenge-mascot{display:flex;align-items:center;gap:16px;padding:18px 22px;background:var(--card,#fff);border:1px solid var(--border,#e3e7ed);border-radius:18px}
+.revenge-mascot p{margin:0;line-height:1.6}
+.revenge-mascot-face{font-size:2.4rem;flex-shrink:0}
+.revenge-typing span{animation:revenge-blink 1s infinite}
+@keyframes revenge-blink{50%{opacity:.25}}
+.revenge-cycle-list{display:grid;gap:10px;margin:16px 0}
+.revenge-cycle{display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;padding:14px;border-radius:12px;border:1px solid var(--border,#e3e7ed);background:transparent;width:100%;color:inherit}
+.revenge-cycle.active{border-color:#4786d4;background:rgba(68,127,206,.08)}
+.revenge-cycle span:first-child{display:grid;gap:5px}
+.revenge-cycle small{font-size:.8rem;color:var(--muted,#687282)}
+.revenge-card{display:grid;gap:18px}
+.revenge-status{display:flex;justify-content:space-between;gap:10px;font-size:.85rem}
+.revenge-progress{height:8px;background:#e8ebf0;overflow:hidden;border-radius:10px}
+.revenge-progress span{display:block;height:100%;background:#3979c8;transition:width .2s}
+.revenge-options{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.revenge-options button{min-height:52px;background:transparent;color:inherit;border:1px solid #a7b2c0;border-radius:12px}
+.revenge-options button.selected{background:rgba(54,120,204,.12);border:2px solid #3979c8}
+.revenge-feedback{padding:18px;border:1px solid var(--border,#e3e7ed);border-radius:12px;display:grid;gap:10px}
+.revenge-feedback.correct{border-color:#5eab82;background:rgba(45,145,91,.06)}
+.revenge-feedback.wrong{border-color:#ce9a76;background:rgba(185,121,63,.06)}
+.revenge-feedback p{margin:0;line-height:1.65}
+.revenge-actions{display:flex;flex-wrap:wrap;gap:10px}
+.revenge-disclaimer{font-size:.8rem;color:var(--muted,#687282)}
+@media(max-width:600px){.revenge-head{flex-direction:column}.revenge-toggle{white-space:normal}.revenge-options{grid-template-columns:1fr}}

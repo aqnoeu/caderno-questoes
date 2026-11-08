@@ -1,0 +1,29 @@
+name: Formatar arquivos alterados (temporário)
+on:
+  push:
+    branches:
+      - fix/v64-revanche-chat-erro
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx prettier --write src/revenge.jsx supabase/functions/revenge-mode/index.ts
+      - run: npm run format:check -- src/revenge.jsx supabase/functions/revenge-mode/index.ts
+      - run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/revenge.jsx supabase/functions/revenge-mode/index.ts
+            git commit -m "style: formatar correções da Revanche em chat"
+            git push origin HEAD:fix/v64-revanche-chat-erro
+          fi

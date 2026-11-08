@@ -566,7 +566,7 @@ function App() {
           <button onClick={() => setNotice("")}>×</button>
         </div>
       )}
-      {area === "user" ? <>{tab === "edital" ? <ProvisionalCreator supabase={supabase} userId={session.user.id} onCreated={edictCreated} onCancel={() => setTab("inicio")} /> : !notebooks.notebook ? <NotebookWelcome state={notebooks} onCreate={openEdict} /> : <><NotebookSwitcher state={notebooks} onCreate={openEdict} />
+      {area === "user" ? <>{tab === "edital" ? <ProvisionalCreator supabase={supabase} userId={session.user.id} questions={questions} onCreated={edictCreated} onCancel={() => setTab("inicio")} /> : !notebooks.notebook ? <NotebookWelcome state={notebooks} onCreate={openEdict} /> : <><NotebookSwitcher state={notebooks} onCreate={openEdict} />
         {tab === "inicio" && <UserHome questions={userQuestions} notebookId={notebooks.notebook.id} userId={session.user.id} name={profile?.display_name} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} goPerformance={() => setTab("desempenho")} goChallenge={() => setTab("desafio")} goRevenge={() => openRevenge()} />}
         <div hidden={tab !== "estudos"}><Study key={notebooks.notebook.id} questions={userQuestions} notebookId={notebooks.notebook.id} supabase={supabase} userId={session.user.id} onRevenge={openRevenge} /></div>
         {tab === "revanche" && <RevengeMode key={notebooks.notebook.id} supabase={supabase} userId={session.user.id} notebookId={notebooks.notebook.id} initialCycleId={revengeCycleId} onBack={() => setTab("estudos")} />}

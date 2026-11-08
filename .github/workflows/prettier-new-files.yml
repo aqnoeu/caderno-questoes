@@ -1,0 +1,46 @@
+name: Prettier — arquivos novos
+
+on:
+  pull_request:
+    paths:
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.json"
+      - "**/*.css"
+      - "package.json"
+      - "package-lock.json"
+      - ".prettierrc.json"
+      - ".prettierignore"
+      - ".github/workflows/prettier-new-files.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check-new-code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verificar apenas arquivos de código adicionados
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          mapfile -d '' -t files < <(git diff --name-only -z --diff-filter=A "$BASE_SHA" HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "Nenhum novo arquivo de código para validar."
+            exit 0
+          fi
+          npm run format:check -- "${files[@]}"

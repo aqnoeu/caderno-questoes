@@ -97,12 +97,10 @@ Deno.serve(async (request) => {
       question_number: Number(q.question_number),
       statement: String(q.statement || "").slice(0, 14000),
       alternatives: Array.isArray(q.alternatives)
-        ? q.alternatives
-            .slice(0, 8)
-            .map((a: any) => ({
-              letter: String(a.letter || ""),
-              text: String(a.text || "").slice(0, 7000),
-            }))
+        ? q.alternatives.slice(0, 8).map((a: any) => ({
+            letter: String(a.letter || ""),
+            text: String(a.text || "").slice(0, 7000),
+          }))
         : [],
     }));
     const characters = JSON.stringify(compact).length;

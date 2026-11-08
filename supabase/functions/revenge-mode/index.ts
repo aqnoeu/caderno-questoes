@@ -273,17 +273,15 @@ Deno.serve(async (request) => {
           { error: "O Gemini rejeitou a validação jurídica. Tente novamente." },
           422,
         );
-      const { error: writeError } = await db
-        .from("revenge_items")
-        .upsert(
-          {
-            session_id: session.id,
-            question_id: questionId,
-            statements: pair,
-            provider_info: { generator: "groq", validator: "gemini" },
-          },
-          { onConflict: "session_id,question_id", ignoreDuplicates: true },
-        );
+      const { error: writeError } = await db.from("revenge_items").upsert(
+        {
+          session_id: session.id,
+          question_id: questionId,
+          statements: pair,
+          provider_info: { generator: "groq", validator: "gemini" },
+        },
+        { onConflict: "session_id,question_id", ignoreDuplicates: true },
+      );
       if (writeError) throw writeError;
       const { data: created } = await db
         .from("revenge_items")

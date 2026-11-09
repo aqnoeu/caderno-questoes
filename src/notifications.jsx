@@ -21,6 +21,15 @@ export function NotificationCenter({ supabase, userId, onNavigate }) {
   const [showPreferences, setShowPreferences] = React.useState(false);
   const [error, setError] = React.useState("");
   const panelRef = React.useRef(null);
+  const popupRef = React.useRef(null);
+  const [dismissed, setDismissed] = React.useState([]);
+  const popup = preferences.support && items.find(
+    (item) => item.category === "support" && item.details?.delivery === "popup" && !item.read_at && !dismissed.includes(item.id),
+  );
+  React.useEffect(() => {
+    const dialog = popupRef.current;
+    if (popup && dialog && !dialog.open) dialog.showModal();
+  }, [popup]);
 
   const refresh = React.useCallback(async () => {
     if (!userId) return;
@@ -60,7 +69,7 @@ export function NotificationCenter({ supabase, userId, onNavigate }) {
   }, [open]);
 
   const unread = items.filter((item) => !item.read_at).length;
-  async function markRead(item) {
+  async function markRead(item, navigate = true) {
     if (!item.read_at) {
       const now = new Date().toISOString();
       const { error: updateError } = await supabase.from("user_notifications")
@@ -69,7 +78,11 @@ export function NotificationCenter({ supabase, userId, onNavigate }) {
       setItems((current) => current.map((row) => row.id === item.id ? { ...row, read_at: now } : row));
     }
     setOpen(false);
-    onNavigate(item.destination, item.notebook_id, item.details);
+    if (navigate) onNavigate(item.destination, item.notebook_id, item.details);
+  }
+  function dismissPopup(navigate) {
+    setDismissed((current) => [...current, popup.id]);
+    markRead(popup, navigate);
   }
   async function markAllRead() {
     const { error: updateError } = await supabase.from("user_notifications")
@@ -88,6 +101,15 @@ export function NotificationCenter({ supabase, userId, onNavigate }) {
 
   return (
     <div className="notification-center" ref={panelRef}>
+      {popup && <dialog key={popup.id} ref={popupRef} className="card support-popup" aria-labelledby="support-popup-title"
+        onCancel={(event) => { event.preventDefault(); dismissPopup(false); }}>
+        <h2 id="support-popup-title">{popup.title}</h2>
+        <p className="support-message">{popup.body}</p>
+        <div className="admin-finance-actions">
+          <button type="button" onClick={() => dismissPopup(true)}>Ver página de apoio</button>
+          <button type="button" className="light" onClick={() => dismissPopup(false)}>Fechar</button>
+        </div>
+      </dialog>}
       <button type="button" className="notification-bell" aria-label={"Notificações" + (unread ? ": " + unread + " não lidas" : "")}
         aria-expanded={open} onClick={() => { setOpen((value) => !value); setShowPreferences(false); if (!open) refresh(); }}>
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.85"

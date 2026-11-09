@@ -2,6 +2,10 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## Pix e campanhas de apoio — 2026-11-09
+
+- Página de apoio com título e mensagem editáveis, chave Pix aleatória opcional e campanhas independentes com envio pela central ou em pop-up.
+
 ## Sugestões de questões — 2026-11-09
 
 - Alunos podem sugerir discursivas e peças com espelho. A administração aprova o envio antes da análise por IA e revisa os critérios antes do cadastro.

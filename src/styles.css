@@ -1684,3 +1684,26 @@ body{overflow-x:hidden}
   overflow-wrap: anywhere;
   font: inherit;
 }
+
+.support-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.support-pix {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+.support-pix code {
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.support-popup {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  margin: auto;
+}
+.support-popup::backdrop {
+  background: rgb(15 23 42 / 55%);
+}

@@ -1,3 +1,4 @@
+import { EssaySuggestions, submitEssaySuggestions } from "./essay-suggestions";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
@@ -237,7 +238,7 @@ const ADMIN_GROUPS=[
     ["sistema2-cadastro","Questões objetivas"],["essay-cadastro","Discursivas"],["essay-pecas","Peças processuais"],
     ["sistema2","Modelo de questões"]]},
   {id:"gestao",label:"Gestão",home:"gestao-cadernos",items:[
-    ["gestao-cadernos","Gerenciar cadernos"],["cadernos","Solicitações"],
+    ["gestao-cadernos","Gerenciar cadernos"],["cadernos","Solicitações"],["essay-suggestions","Sugestões de questões"],
     ["questoes","Questões cadastradas"],["essay-library","Discursivas e peças cadastradas"],
     ["desafios","Desafios"],["sistema2-content","Controle de conteúdo"],["sistema2-filter","Filtro IA"],
     ["sistema2-test","Testar ciclo"],["ai-providers","Configurações das IAs"],
@@ -296,7 +297,7 @@ function AdminLanding({title,description,items,onOpen}){
 function UserHub({ profile, isAdmin, go, admin }) {
   const items=[["inicio","home","Início"],["desempenho","bars","Desempenho"],
     ["revanche","cycle","Modo Revanche"],["cadernos","document","Meus cadernos"],
-    ["configuracoes","settings","Configurações"],["apoio","heart","Apoiar o projeto"]];
+    ["essay-suggestions","document","Sugerir questões"],["configuracoes","settings","Configurações"],["apoio","heart","Apoiar o projeto"]];
   return <section className="card user-hub">
     <span className="eyebrow">MINHA ÁREA</span>
     <h1>Perfil</h1>
@@ -317,6 +318,7 @@ function App() {
     [tab, setTab] = React.useState("inicio"),
     [revengeCycleId, setRevengeCycleId] = React.useState(""),
     [adminTab, setAdminTab] = React.useState("admin-analise"),
+    [essaySuggestion, setEssaySuggestion] = React.useState(null),
     [reviewNotebookId, setReviewNotebookId] = React.useState(null),
     [area, setArea] = React.useState("user"),
     [profile, setProfile] = React.useState(undefined),
@@ -658,7 +660,7 @@ function App() {
           <button onClick={() => setNotice("")}>×</button>
         </div>
       )}
-      {area === "user" ? <>{tab === "edital" ? <ProvisionalCreator supabase={supabase} userId={session.user.id} questions={questions} onCreated={edictCreated} onCancel={() => setTab("inicio")} onFinish={() => setTab("inicio")} onPlanNow={() => setTab("planejamento")} /> : tab === "perfil" ? <UserHub profile={profile} isAdmin={isAdmin} go={(target)=>setTab(target)} admin={openAdmin}/> : tab === "configuracoes" ? <UserProfile profile={profile} session={session} supabase={supabase} onProfileSaved={(values) => setProfile((current) => ({ ...current, ...values }))} /> : tab === "apoio" ? <StudentSupport supabase={supabase} onBack={()=>setTab("perfil")} /> : !notebooks.notebook ? <NotebookWelcome state={notebooks} onCreate={openEdict} /> : <><NotebookSwitcher state={notebooks} onCreate={openEdict} />
+      {area === "user" ? <>{tab === "edital" ? <ProvisionalCreator supabase={supabase} userId={session.user.id} questions={questions} onCreated={edictCreated} onCancel={() => setTab("inicio")} onFinish={() => setTab("inicio")} onPlanNow={() => setTab("planejamento")} /> : tab === "perfil" ? <UserHub profile={profile} isAdmin={isAdmin} go={(target)=>setTab(target)} admin={openAdmin}/> : tab === "configuracoes" ? <UserProfile profile={profile} session={session} supabase={supabase} onProfileSaved={(values) => setProfile((current) => ({ ...current, ...values }))} /> : tab === "essay-suggestions" ? <EssayAdmin key={session.user.id} supabase={supabase} student userId={session.user.id} /> : tab === "apoio" ? <StudentSupport supabase={supabase} onBack={()=>setTab("perfil")} /> : !notebooks.notebook ? <NotebookWelcome state={notebooks} onCreate={openEdict} /> : <><NotebookSwitcher state={notebooks} onCreate={openEdict} />
         {tab === "inicio" && <UserHome questions={userQuestions} notebookId={notebooks.notebook.id} userId={session.user.id} name={profile?.display_name} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} goPerformance={() => setTab("desempenho")} goChallenge={() => setTab("desafio")} goRevenge={() => openRevenge()} />}
         <div hidden={tab !== "estudos"}><Study key={notebooks.notebook.id} questions={userQuestions} notebookId={notebooks.notebook.id} supabase={supabase} userId={session.user.id} onRevenge={openRevenge} /></div>
         {tab === "revanche" && <RevengeMode key={notebooks.notebook.id} supabase={supabase} userId={session.user.id} notebookId={notebooks.notebook.id} initialCycleId={revengeCycleId} onBack={() => setTab("estudos")} />}
@@ -677,6 +679,9 @@ function App() {
   {adminTab === "admin-analise" && <AdminAnalytics supabase={supabase}/>}
   {adminTab === "admin-financeiro" && <AdminFinance supabase={supabase}/>}
   {adminTab === "gestao-cadernos" && <AdminNotebookCatalog supabase={supabase} onReview={id=>{setReviewNotebookId(id);setAdminTab("cadernos");}}/>}
+  {adminTab === "essay-suggestions" && (essaySuggestion
+    ? <><button className="light" onClick={()=>setEssaySuggestion(null)}>Voltar às sugestões</button><EssayAdmin key={essaySuggestion.id} supabase={supabase} suggestion={essaySuggestion} onProcessed={()=>setEssaySuggestion(null)} /></>
+    : <EssaySuggestions supabase={supabase} onOpen={setEssaySuggestion} />)}
   {adminTab === "cadernos" && <AdminNotebooks supabase={supabase} questions={questions} focusNotebookId={reviewNotebookId} />}{adminTab === "overview" && <AdminOverview questions={questions} supabase={supabase} />}{adminTab === "cadastro" && cadastroContent}{adminTab === "questoes" && <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} supabase={supabase} />}{(adminTab === "essay-cadastro" || adminTab === "essay-pecas") && <EssayAdmin supabase={supabase} />}{adminTab === "essay-library" && <EssayLibrary supabase={supabase} />}{adminTab === "desafios" && <ChallengeAdmin supabase={supabase} />}{adminTab === "creditos" && <CorrectionCreditsAdmin supabase={supabase} />}{adminTab === "sistema2" && <System2Home openCadastro={() => setAdminTab("sistema2-cadastro")} openFilter={() => setAdminTab("sistema2-filter")} openContent={() => setAdminTab("sistema2-content")} />}{adminTab === "sistema2-cadastro" && <System2Cadastro supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "sistema2-filter" && <System2Filter supabase={supabase} onBack={() => setAdminTab("sistema2")} openContent={() => setAdminTab("sistema2-content")} />}{adminTab === "sistema2-content" && <System2Content supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "sistema2-test" && <System2Test supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "ai-providers" && <AiProviderSettings supabase={supabase} />}</div></section> : <section className="card"><h2>Acesso restrito</h2><p>Esta área é exclusiva para administradores.</p><button onClick={() => openUser("inicio")}>Voltar ao início</button></section>}
     </main>
   );
@@ -1139,12 +1144,13 @@ async function extractPdfText(file) {
 }
 const emptyEssay = () => ({ statement: "", question_number: "", discipline: "", subjects: "", difficulty: "media", banca: "", ano: "", concurso: "", application_date: "", total_points: "0", answer_key_text: "", official_commentary: "", rubrics: [], selected: true });
 
-function EssayAdmin({ supabase }) {
-  const [kind,setKind]=React.useState("discursive"), [contestCargo,setContestCargo]=React.useState(""), [routing,setRouting]=React.useState(null), [subjectFocus,setSubjectFocus]=React.useState(""), [proofText, setProofText] = React.useState(""), [keyText, setKeyText] = React.useState(""), [proofName, setProofName] = React.useState(""), [keyName, setKeyName] = React.useState(""), [drafts, setDrafts] = React.useState([]), [notice, setNotice] = React.useState(""), [busy, setBusy] = React.useState(false);
+function EssayAdmin({ supabase, student = false, userId, suggestion, onProcessed }) {
+  const [kind,setKind]=React.useState(suggestion?.question_type || "discursive"), [contestCargo,setContestCargo]=React.useState(suggestion?.contest_cargo || ""), [routing,setRouting]=React.useState(null), [subjectFocus,setSubjectFocus]=React.useState(""), [proofText, setProofText] = React.useState(""), [keyText, setKeyText] = React.useState(""), [proofName, setProofName] = React.useState(""), [keyName, setKeyName] = React.useState(""), [drafts, setDrafts] = React.useState(() => suggestion ? [{...emptyEssay(), ...suggestion, question_number:suggestion.question_number || "", ano:suggestion.ano || "", official_commentary:suggestion.answer_key_text, total_points:suggestion.question_type === "piece" ? "5" : "0"}] : []), [notice, setNotice] = React.useState(""), [busy, setBusy] = React.useState(false);
+  const [submitted, setSubmitted] = React.useState(0), [analyzed, setAnalyzed] = React.useState(false);
   const currentContest = drafts.find(item => item.selected)?.concurso || "";
   React.useEffect(()=>{
     let active=true;
-    if(!currentContest.trim()){setRouting(null);return undefined;}
+    if(student || !currentContest.trim()){setRouting(null);return undefined;}
     const timer=window.setTimeout(async()=>{
       const {data,error}=await supabase.rpc("notebook_preview_v63",{
         p_concurso:currentContest,
@@ -1154,8 +1160,11 @@ function EssayAdmin({ supabase }) {
       if(active)setRouting(error?{ready:false,reason:error.message}:data);
     },350);
     return ()=>{active=false;window.clearTimeout(timer);};
-  },[supabase,currentContest,contestCargo,subjectFocus]);
-  const patch = (index, changes) => setDrafts((list) => list.map((item, i) => i === index ? { ...item, ...changes } : item));
+  },[supabase,currentContest,contestCargo,subjectFocus,student]);
+  const patch = (index, changes) => {
+    if (suggestion && ("statement" in changes || "answer_key_text" in changes)) setAnalyzed(false);
+    setDrafts(list => list.map((item, i) => i === index ? { ...item, ...changes } : item));
+  };
   async function readFile(file, kind) { try { setNotice(`Lendo ${file.name}…`); const text = await extractPdfText(file); if (kind === "proof") { setProofText(text); setProofName(file.name); } else { setKeyText(text); setKeyName(file.name); } setNotice("PDF lido com sucesso. Clique em Separar conteúdo quando os dois arquivos estiverem selecionados."); } catch (error) { setNotice(error.message); } }
   function separate() {
     const source=cleanEssayText(proofText),key=cleanEssayText(keyText);
@@ -1174,12 +1183,25 @@ function EssayAdmin({ supabase }) {
       const answer=key.slice(km.index+km[0].length).split(/PADR[ÃA]O\s+DE\s+RESPOSTA\s*[–-]?\s*QUEST[ÃA]O\s+1\b/i)[0].trim();
       if(statement.length<100||answer.length<100)return setNotice("Não foi possível separar a peça e o espelho com segurança. Confira os arquivos.");
       setDrafts([{...emptyEssay(),...metadata,question_type:"piece",question_number:"",statement,answer_key_text:answer,official_commentary:answer,total_points:"5"}]);
-      return setNotice("Peça e espelho extraídos para análise pelo Groq. Revise o texto e os critérios antes de salvar.");
+      return setNotice(student ? "Confira a peça e o espelho antes de enviar." : "Peça e espelho extraídos para análise pelo Groq. Revise o texto e os critérios antes de salvar.");
     }
     const proof=parseEssayProof(proofText),keys=new Map(parseEssayKey(keyText).map(item=>[item.number,item.text]));
     if(!proof.length)return setNotice("Não encontrei as questões 1 a 4 no caderno. Verifique se o PDF possui texto selecionável.");
     setDrafts(proof.map(item=>({...emptyEssay(),...metadata,question_type:"discursive",question_number:String(item.number),statement:item.text,answer_key_text:keys.get(item.number)||"",official_commentary:keys.get(item.number)||""})));
-    setNotice(proof.length+" discursiva(s) separada(s). Agora organize os critérios com IA e revise antes de salvar.");
+    setNotice(student ? "Confira as questões e os espelhos antes de enviar." : proof.length+" discursiva(s) separada(s). Agora organize os critérios com IA e revise antes de salvar.");
+  }
+  async function submit() {
+    const selected = drafts.filter(item => item.selected);
+    if (!selected.length || selected.some(item => !item.statement.trim() || !item.answer_key_text.trim() || !item.concurso.trim())) {
+      return setNotice("Selecione ao menos uma questão e preencha concurso, enunciado e espelho em cada item selecionado.");
+    }
+    setBusy(true);
+    try {
+      await submitEssaySuggestions(supabase, selected, contestCargo);
+      setDrafts(drafts.filter(item => !item.selected));
+      setSubmitted(count => count + 1);
+      setNotice("Sugestões enviadas para avaliação do administrador.");
+    } catch (error) { setNotice(error.message); } finally { setBusy(false); }
   }
   async function classify() {
     const chosen = drafts.map((item, index) => ({ item, index })).filter(({ item }) => item.selected);
@@ -1191,6 +1213,7 @@ function EssayAdmin({ supabase }) {
         const { data, error } = await supabase.functions.invoke("analyze-essays", { body: { questions: group.map(({ item }, index) => ({ index, question_number: item.question_number, statement: item.statement, answer_key_text: item.answer_key_text, discipline: item.discipline, question_type:item.question_type })), source_header:proofText.slice(0,2500), key_header:keyText.slice(0,2500) } });
         if (error) throw error;
         const results = data?.results || [];
+        if (suggestion && !results.some(result => result.index === 0 && result.rubrics?.length)) throw new Error("A análise não retornou critérios. Tente novamente.");
         setSubjectFocus(current => current || results.map(result => result.discipline).filter(Boolean).join("; "));
         const autoMeta = data?.metadata || {};
         if (start===0) {
@@ -1199,10 +1222,12 @@ function EssayAdmin({ supabase }) {
         setDrafts((all) => { const next = [...all]; results.forEach((result) => { const original = group[result.index]; if (!original) return; const current = next[original.index]; next[original.index] = { ...current, concurso:current.concurso||autoMeta.concurso||"", banca:current.banca||autoMeta.banca||"", ano:current.ano||autoMeta.ano||"", discipline: result.discipline || current.discipline || autoMeta.disciplina || "", subjects: formatSubjects(result.subjects || current.subjects), difficulty: result.difficulty || current.difficulty, total_points: String(result.total_points ?? current.total_points), official_commentary: result.official_commentary || current.official_commentary, rubrics: Array.isArray(result.rubrics) ? result.rubrics : current.rubrics }; }); return next; });
       }
       setSubjectFocus(current=>current||chosen.map(({item})=>item.discipline).filter(Boolean).join("; "));
+      setAnalyzed(true);
       setNotice("Classificação concluída. Revise enunciado, espelho, concurso, cargo e critérios antes de salvar.");
     } catch (error) { setNotice(error.message || "Não foi possível classificar as discursivas."); } finally { setBusy(false); }
   }
   async function save() {
+    if (suggestion && !analyzed) return setNotice("Organize os critérios com IA antes de salvar.");
     const selected = drafts.filter((item) => item.selected);
     if (!selected.length) return setNotice("Selecione ao menos uma discursiva para salvar.");
     if (!selected[0]?.concurso?.trim()) return setNotice("Informe o concurso para identificar o caderno.");
@@ -1219,15 +1244,29 @@ function EssayAdmin({ supabase }) {
       );
       for (const item of selected) {
         const row = { statement: item.statement.trim(), question_number: Number(item.question_number) || null, discipline: item.discipline.trim() || null, subjects: formatSubjects(item.subjects), difficulty: item.difficulty, banca: item.banca.trim() || null, ano: item.ano ? Number(item.ano) : null, concurso: item.concurso.trim() || null, application_date: item.application_date || null, total_points: Number(item.total_points || 0), answer_key_text: item.answer_key_text.trim(), official_commentary: item.official_commentary.trim() || null, question_type:item.question_type||"discursive",source_file:proofName,metadata:{source:"importacao-v62",modalidade:item.question_type||"discursive",edicao:item.edicao||null} };
-        const { data, error } = await supabase.from("essay_questions").insert(row).select("id").single(); if (error) throw error;
-        const {error:linkError}=await supabase.from("notebook_essays").insert({notebook_id:destination.notebook_id,essay_question_id:data.id}); if(linkError) throw linkError;
-        const rubrics = (item.rubrics || []).filter((rubric) => rubric.criterion?.trim()).map((rubric, index) => ({ essay_question_id: data.id, section: rubric.section || null, subitem: rubric.subitem || null, criterion: rubric.criterion.trim(), expected_content: rubric.expected_content || null, legal_basis: rubric.legal_basis || null, max_points: Number(rubric.max_points || 0), display_order: index, required: Boolean(rubric.required) }));
-        if (rubrics.length) { const { error } = await supabase.from("essay_rubric_items").insert(rubrics); if (error) throw error; }
+        const rubrics = (item.rubrics || []).filter((rubric) => rubric.criterion?.trim()).map((rubric, index) => ({ section: rubric.section || null, subitem: rubric.subitem || null, criterion: rubric.criterion.trim(), expected_content: rubric.expected_content || null, legal_basis: rubric.legal_basis || null, max_points: Number(rubric.max_points || 0), display_order: index, required: Boolean(rubric.required) }));
+        if (suggestion) {
+          const { error } = await supabase.rpc("publish_essay_suggestion", {
+            suggestion_id: suggestion.id, notebook: destination.notebook_id, essay: row, criteria: rubrics,
+          });
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase.from("essay_questions").insert(row).select("id").single();
+          if (error) throw error;
+          const { error: linkError } = await supabase.from("notebook_essays").insert({notebook_id:destination.notebook_id,essay_question_id:data.id});
+          if (linkError) throw linkError;
+          if (rubrics.length) {
+            const { error } = await supabase.from("essay_rubric_items").insert(rubrics.map(rubric => ({...rubric, essay_question_id:data.id})));
+            if (error) throw error;
+          }
+        }
       }
+      if (suggestion) return onProcessed();
       setDrafts([]); setNotice(`${selected.length} item(ns) salvos. ${destination.created ? "Caderno criado" : "Caderno identificado"}: ${destination.title}. ${destination.borrowed ? `${destination.borrowed} questões aproveitadas.` : ""}`);
     } catch (error) { setNotice(error.message || "Erro ao salvar."); } finally { setBusy(false); }
   }
-  return <section className="essay-admin"><div className="library-heading"><div><span className="eyebrow">MODELO OFICIAL</span><h2>Importar discursivas e peças práticas</h2><p>Groq organiza critérios do espelho; o Gemini permanece na correção jurídica das respostas dos alunos.</p></div></div><div className="card essay-import"><label>Modalidade<select value={kind} onChange={event=>{setKind(event.target.value);setDrafts([]);}}><option value="discursive">Questões discursivas</option><option value="piece">Peça prático-profissional</option></select></label><label>Cargo do concurso (não é edição ou ano)<input value={contestCargo} onChange={event=>setContestCargo(event.target.value)} placeholder="Procurador Municipal, Analista Judiciário..."/></label><label>Matérias para aproveitamento inicial<input value={subjectFocus} onChange={event=>setSubjectFocus(event.target.value)} placeholder="Direito Constitucional; Direito Administrativo"/></label>{routing && <div className="system2-note"><b>{routing.ready ? (routing.matched ? "Caderno existente" : "Novo caderno") : "Identificação incompleta"}</b><p>{routing.ready ? routing.title : routing.reason}</p><small>O caderno será criado apenas ao salvar, com aproveitamento por matéria somente se for novo.</small></div>}<label className={`drop ${proofName ? "file-ready" : ""}`}>1. {proofName ? `✓ Prova carregada: ${proofName}` : "Selecionar caderno de prova"}<input hidden type="file" accept="application/pdf" onChange={(e) => e.target.files[0] && readFile(e.target.files[0], "proof")} /></label><label className={`drop ${keyName ? "file-ready" : ""}`}>2. {keyName ? `✓ Espelho carregado: ${keyName}` : "Selecionar padrão de resposta"}<input hidden type="file" accept="application/pdf" onChange={(e) => e.target.files[0] && readFile(e.target.files[0], "key")} /></label><div className="study-actions"><button className="light" disabled={!proofText || !keyText || busy} onClick={separate}>Separar conteúdo</button><button disabled={!drafts.length || busy} onClick={classify}>{busy ? "Classificando…" : "Organizar critérios com IA"}</button><button className="light" disabled={!drafts.length || busy} onClick={save}>Salvar selecionadas</button></div>{notice && <p className="form-message">{notice}</p>}</div>{drafts.length > 0 && <div className="essay-import-list">{drafts.map((item, index) => <article className="card essay-import-card" key={index}><div className="card-top"><label className="card-check"><input type="checkbox" checked={item.selected} onChange={(e) => patch(index, { selected: e.target.checked })} /> Salvar</label><b>Questão {item.question_number}</b><span className={`difficulty ${item.difficulty}`}>{item.difficulty}</span></div><div className="cols"><label>Concurso<input value={item.concurso} onChange={(e) => patch(index, { concurso: e.target.value })} /></label><label>Banca<input value={item.banca} onChange={(e) => patch(index, { banca: e.target.value })} /></label><label>Ano<input value={item.ano} onChange={(e) => patch(index, { ano: e.target.value })} /></label></div><div className="cols"><label>Disciplina<input value={item.discipline} onChange={(e) => patch(index, { discipline: e.target.value })} /></label><label>Assunto(s)<input placeholder="Use · ou ;" value={item.subjects} onChange={(e) => patch(index, { subjects: e.target.value })} /></label><label>Dificuldade<select value={item.difficulty} onChange={(e) => patch(index, { difficulty: e.target.value })}><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select></label></div><label>Enunciado<textarea rows="7" value={item.statement} onChange={(e) => patch(index, { statement: e.target.value })} /></label><label>Espelho oficial<textarea rows="7" value={item.answer_key_text} onChange={(e) => patch(index, { answer_key_text: e.target.value })} /></label><div className="rubric-summary"><b>Critérios oficiais ({item.rubrics.length}) · valor {item.total_points} ponto(s)</b>{item.rubrics.map((rubric, rubricIndex) => <div className="rubric-row" key={rubricIndex}><input placeholder="Item / seção" value={rubric.section || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], section: e.target.value }; patch(index, { rubrics }); }} /><input placeholder="Critério" value={rubric.criterion || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], criterion: e.target.value }; patch(index, { rubrics }); }} /><input type="number" step="0.05" placeholder="Pontos" value={rubric.max_points || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], max_points: e.target.value }; patch(index, { rubrics }); }} /></div>)}</div></article>)}</div>}</section>;
+  return <section className="essay-admin"><div className="library-heading"><div><span className="eyebrow">MODELO OFICIAL</span><h2>{student ? "Sugerir questões" : suggestion ? "Processar sugestão aprovada" : "Importar discursivas e peças práticas"}</h2><p>{student ? "Envie o enunciado e o espelho para avaliação do administrador." : "Organize os critérios com IA e revise antes de salvar."}</p></div></div><div className="card essay-import"><fieldset disabled={busy}><label>Modalidade<select disabled={Boolean(suggestion)} value={kind} onChange={event=>{setKind(event.target.value);setDrafts([]);}}><option value="discursive">Questões discursivas</option><option value="piece">Peça prático-profissional</option></select></label><label>Cargo do concurso (não é edição ou ano)<input value={contestCargo} onChange={event=>setContestCargo(event.target.value)} placeholder="Procurador Municipal, Analista Judiciário..."/></label>{!student && <label>Matérias para aproveitamento inicial<input value={subjectFocus} onChange={event=>setSubjectFocus(event.target.value)} placeholder="Direito Constitucional; Direito Administrativo"/></label>}{routing && <div className="system2-note"><b>{routing.ready ? (routing.matched ? "Caderno existente" : "Novo caderno") : "Identificação incompleta"}</b><p>{routing.ready ? routing.title : routing.reason}</p><small>O caderno será criado apenas ao salvar, com aproveitamento por matéria somente se for novo.</small></div>}{!suggestion && <><label className={`drop ${proofName ? "file-ready" : ""}`}>1. {proofName ? `✓ Prova carregada: ${proofName}` : "Selecionar caderno de prova"}<input hidden type="file" accept="application/pdf" onChange={(e) => e.target.files[0] && readFile(e.target.files[0], "proof")} /></label><label className={`drop ${keyName ? "file-ready" : ""}`}>2. {keyName ? `✓ Espelho carregado: ${keyName}` : "Selecionar padrão de resposta"}<input hidden type="file" accept="application/pdf" onChange={(e) => e.target.files[0] && readFile(e.target.files[0], "key")} /></label><div className="study-actions"><button type="button" className="light" disabled={!proofText || !keyText || busy} onClick={separate}>Separar conteúdo</button>{student && <button type="button" className="light" onClick={()=>setDrafts(items=>[...items,{...emptyEssay(),question_type:kind}])}>Preencher manualmente</button>}</div></>}
+    <div className="study-actions">{student ? <button disabled={!drafts.length || busy} onClick={submit}>Enviar para aprovação</button> : <><button disabled={!drafts.length || busy} onClick={classify}>{busy ? "Classificando…" : "Organizar critérios com IA"}</button><button className="light" disabled={!drafts.length || busy || (suggestion && !analyzed)} onClick={save}>Salvar selecionadas</button></>}</div></fieldset>{notice && <p className="form-message">{notice}</p>}</div>{drafts.length > 0 && <div className="essay-import-list">{drafts.map((item, index) => <fieldset disabled={busy} className="card essay-import-card" key={index}><div className="card-top"><label className="card-check"><input type="checkbox" checked={item.selected} onChange={(e) => patch(index, { selected: e.target.checked })} /> {student ? "Enviar" : "Salvar"}</label><b>Questão {item.question_number}</b><span className={`difficulty ${item.difficulty}`}>{item.difficulty}</span></div><div className="cols"><label>Concurso<input value={item.concurso} onChange={(e) => patch(index, { concurso: e.target.value })} /></label><label>Banca<input value={item.banca} onChange={(e) => patch(index, { banca: e.target.value })} /></label><label>Ano<input value={item.ano} onChange={(e) => patch(index, { ano: e.target.value })} /></label></div><div className="cols"><label>Disciplina<input value={item.discipline} onChange={(e) => patch(index, { discipline: e.target.value })} /></label><label>Assunto(s)<input placeholder="Use · ou ;" value={item.subjects} onChange={(e) => patch(index, { subjects: e.target.value })} /></label><label>Dificuldade<select value={item.difficulty} onChange={(e) => patch(index, { difficulty: e.target.value })}><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select></label></div><label>Enunciado<textarea rows="7" value={item.statement} onChange={(e) => patch(index, { statement: e.target.value })} /></label><label>Espelho oficial<textarea rows="7" value={item.answer_key_text} onChange={(e) => patch(index, { answer_key_text: e.target.value })} /></label>{!student && <div className="rubric-summary"><b>Critérios oficiais ({item.rubrics.length}) · valor {item.total_points} ponto(s)</b>{item.rubrics.map((rubric, rubricIndex) => <div className="rubric-row" key={rubricIndex}><input placeholder="Item / seção" value={rubric.section || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], section: e.target.value }; patch(index, { rubrics }); }} /><input placeholder="Critério" value={rubric.criterion || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], criterion: e.target.value }; patch(index, { rubrics }); }} /><input type="number" step="0.05" placeholder="Pontos" value={rubric.max_points || ""} onChange={(e) => { const rubrics = [...item.rubrics]; rubrics[rubricIndex] = { ...rubrics[rubricIndex], max_points: e.target.value }; patch(index, { rubrics }); }} /></div>)}</div>}</fieldset>)}</div>}{student && <EssaySuggestions key={submitted} supabase={supabase} userId={userId} />}</section>;
 }
 
 function EssayLibrary({ supabase }) {

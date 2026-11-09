@@ -2,6 +2,10 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## Sugestões de questões — 2026-11-09
+
+- Alunos podem sugerir discursivas e peças com espelho. A administração aprova o envio antes da análise por IA e revisa os critérios antes do cadastro.
+
 ## v61 — 2026-11-08
 
 - Prettier 3.6.2 instalado como dependência de desenvolvimento, com configuração única para JavaScript, JSX, TypeScript, JSON e CSS; comandos `npm run format -- arquivo` e `npm run format:check -- arquivo`.

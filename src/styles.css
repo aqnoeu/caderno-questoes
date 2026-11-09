@@ -1667,3 +1667,20 @@ body{overflow-x:hidden}
   .admin-analysis-grid article{gap:7px;padding:12px!important}
   .admin-analysis-grid article strong{font-size:24px;line-height:1.2}
 }
+
+.essay-import fieldset,
+.essay-import-card {
+  min-width: 0;
+}
+.essay-import fieldset {
+  display: grid;
+  gap: 12px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.essay-suggestion-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}

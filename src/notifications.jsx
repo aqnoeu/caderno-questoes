@@ -5,6 +5,7 @@ const CATEGORIES = [
   ["revenge", "Revanche pendente", "⚔️"],
   ["achievement", "Conquistas", "🏆"],
   ["study", "Estudos pendentes", "🗓️"],
+  ["support", "Convites de apoio", "💙"],
 ];
 const DEFAULT_PREFS = Object.fromEntries(CATEGORIES.map(([key]) => [key, true]));
 

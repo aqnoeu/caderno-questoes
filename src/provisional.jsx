@@ -24,24 +24,47 @@ async function readPdf(file){
  return pages;
 }
 function overviewText(pages){
- // Prioritize exact evidence: jobs, exam rules, official schedule (not mentions in the index).
- const indices=new Set([...Array(Math.min(5,pages.length)).keys()]);
- const examStart=pages.findIndex(p=>/^\s*(?:9|10)\.\s*(?:DAS PROVAS|DA PROVA DISCURSIVA)/im.test(p));
- if(examStart>=0)for(let i=examStart;i<Math.min(pages.length,examStart+5);i++)indices.add(i);
- const scheduleStart=pages.findIndex(p=>/^\s*ANEXO III\s*[–-]\s*DO CRONOGRAMA/im.test(p));
- if(scheduleStart>=0)for(let i=scheduleStart;i<Math.min(pages.length,scheduleStart+3);i++)indices.add(i);
- return [...indices].sort((a,b)=>a-b).map(i=>"\n[PÁGINA "+(i+1)+"]\n"+pages[i]).join("\n").slice(0,65000);
+ const chunks=[];
+ const add=(i,limit)=>{
+   if(i<0||i>=pages.length||chunks.some(c=>c.page===i))return;
+   chunks.push({page:i,text:pages[i].slice(0,limit)});
+ };
+ // Preserve space for the role/salary table, stages and official schedule.
+ add(0,1700);add(1,800);
+ const jobs=pages.map((text,i)=>({i,score:
+   (/QUADRO DE VAGAS|CARGO\s+VAGAS|CARGOS\s+VENCIMENTOS|REMUNERAÇÃO\s+VAGAS/i.test(text)?4:0)
+   +(/VENCIMENTO|SALÁRIO|REMUNERAÇÃO/i.test(text)?1:0)
+   +(/PROCURADOR|ANALISTA|ASSISTENTE|TÉCNICO/i.test(text)?1:0)
+ })).filter(x=>x.score>=2).sort((a,b)=>b.score-a.score).slice(0,3);
+ jobs.forEach(({i})=>add(i,1600));
+ const exam=pages.findIndex(p=>/^\s*(?:\d+[.)]?\s*)?(?:DAS PROVAS|DA PROVA OBJETIVA|DAS ETAPAS)/im.test(p));
+ add(exam,1800);
+ const timeline=pages.findIndex(p=>/^\s*ANEXO III\s*[–-]\s*DO CRONOGRAMA/im.test(p));
+ add(timeline,2300);
+ return chunks.map(({page,text})=>"\n[PÁGINA "+(page+1)+"]\n"+text).join("\n").slice(0,11600);
 }
-function syllabusText(pages){
+function syllabusText(pages,role){
  let start=-1;
  for(let i=pages.length-1;i>=0;i--){
    if(/^\s*ANEXO II\s*[–-]\s*DOS CONTEÚDOS PROGRAMÁTICOS/im.test(pages[i])){start=i;break;}
  }
  const after=start>=0?start:Math.max(0,pages.length-20);
- const end=pages.findIndex((p,i)=>i>after&&/ANEXO III\s*[–-]\s*DO CRONOGRAMA/i.test(p));
- const selected=pages.slice(after,end>after?end:Math.min(pages.length,after+20));
- const rules=pages.slice(Math.max(0,after-22),after).filter(p=>/DAS PROVAS|PROVAS OBJETIVAS|PROVAS DISCURSIVAS|PONTUAÇÃO/i.test(p)).slice(-5);
- return [...rules,...selected].join("\n\n[PÁGINA SEGUINTE]\n\n").slice(0,85000);
+ const end=pages.findIndex((p,i)=>i>after&&/^\s*ANEXO III\s*[–-]\s*DO CRONOGRAMA/im.test(p));
+ const boundary=end>after?end:pages.length;
+ const selected=[];
+ const add=(i,max)=>{
+   if(i<after||i>=boundary||selected.some(x=>x.i===i))return;
+   selected.push({i,text:pages[i].slice(0,max)});
+ };
+ add(after,2400);add(after+1,1800);
+ const term=String(role||"").trim().toLocaleLowerCase("pt-BR");
+ const relevant=[];
+ for(let i=after;i<boundary;i++){
+   if(pages[i].toLocaleLowerCase("pt-BR").includes(term))relevant.push(i);
+ }
+ for(const i of relevant.slice(-3)){add(i,2500);add(i+1,1800);}
+ const rules=pages.slice(Math.max(0,after-25),after).filter(p=>/PROVAS OBJETIVAS|PROVAS DISCURSIVAS/i.test(p)).slice(-1);
+ return [...rules.map(t=>t.slice(0,1100)),...selected.map(({i,text})=>"[PÁGINA "+(i+1)+"]\n"+text)].join("\n").slice(0,13800);
 }
 const asList=(v)=>Array.isArray(v)?v:[];
 
@@ -93,7 +116,7 @@ export function ProvisionalCreator({supabase,userId,questions=[],onCreated,onCan
  async function selectRole(role,index){
    setRoleIndex(index);setSelectedRole(role);setBusy(true);setError("");
    try{
-     const data=await invoke("syllabus",{role:role.original_name,text:syllabusText(pages)});
+     const data=await invoke("syllabus",{role:role.original_name,text:syllabusText(pages,role.original_name)});
      const collected=asList(data.topics).filter(t=>t?.discipline);
      if(!collected.length)throw Error("Não foram identificadas matérias para esse cargo.");
      setSyllabus(data);setTopics(collected);

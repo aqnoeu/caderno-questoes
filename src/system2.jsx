@@ -185,14 +185,17 @@ const statusInfo = {
   approved: { label:"Aprovadas", detail:"Prontas para a etapa de controle de conteúdo." },
 };
 
-function useSystem2Questions(supabase) {
+function useSystem2Questions(supabase, contentView) {
   const [questions, setQuestions] = React.useState([]), [loading, setLoading] = React.useState(true), [error, setError] = React.useState("");
   const load = React.useCallback(async () => {
     setLoading(true); setError("");
-    const { data, error: queryError } = await supabase.from("questions_v2").select("id, question_number, statement, alternatives, answer_key_option, extraction_warnings, status, discipline, subjects, subtopics, legal_concepts, alternatives_analysis, legal_basis, central_rule, legal_reasoning, study_content, correct_answer_explanation, option_error_analysis, analysis_steps, ai_stage, is_test, promoted_question_id, difficulty, ai_confidence, ai_result, ai_attempts, ai_last_error, ai_processed_at, next_attempt_at, created_at, import:question_imports(concurso, edicao, ano, banca)").order("created_at", { ascending:false });
+    let query = supabase.from("questions_v2").select("id, question_number, statement, alternatives, answer_key_option, extraction_warnings, status, discipline, subjects, subtopics, legal_concepts, alternatives_analysis, legal_basis, central_rule, legal_reasoning, study_content, correct_answer_explanation, option_error_analysis, analysis_steps, ai_stage, is_test, promoted_question_id, difficulty, ai_confidence, ai_result, ai_attempts, ai_last_error, ai_processed_at, next_attempt_at, created_at, import:question_imports(concurso, edicao, ano, banca)").order("created_at", { ascending:false });
+    if (contentView === "pending") query = query.eq("status", "approved").is("promoted_question_id", null);
+    if (contentView === "promoted") query = query.not("promoted_question_id", "is", null);
+    const { data, error: queryError } = await query;
     if (queryError) setError(queryError.message); else setQuestions(data || []);
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, contentView]);
   React.useEffect(() => { load(); }, [load]);
   return { questions, loading, error, reload:load };
 }
@@ -314,9 +317,37 @@ export function System2Filter({ supabase, onBack, openContent }) {
 }
 
 export function System2Content({ supabase, onBack }) {
-  const { questions, loading, error, reload } = useSystem2Questions(supabase);
-  const approved = questions.filter((item) => item.status === "approved");
-  return <section className="system2-page"><button className="link-button" onClick={onBack}>← Voltar ao Modelo novo</button><span className="eyebrow">CONTROLE DE CONTEÚDO</span><h1>Questões aprovadas</h1><p className="system2-lead">Leia, edite, exclua, devolva para revisão ou promova uma questão ao acervo atual quando estiver pronta.</p><div className="system2-toolbar"><p><b>{approved.length}</b> questão(ões) aprovadas.</p><div><button className="light compact" onClick={reload}>Atualizar dados</button></div></div>{loading ? <p className="empty-state">Carregando questões aprovadas…</p> : error ? <p className="form-message">Não foi possível carregar as questões: {error}</p> : approved.length ? <System2List items={approved} renderItem={(item) => <System2QuestionCardV2 key={item.id} item={item} supabase={supabase} onChanged={reload} allowPromote />} /> : <div className="card empty-state"><b>Ainda não há questões aprovadas.</b><p>As questões aprovadas no Filtro de IA aparecerão aqui automaticamente.</p></div>}<div className="system2-note">Promover cria uma cópia no acervo atual. Editar ou excluir aqui continua alterando somente o Modelo novo.</div></section>;
+  const [view, setView] = React.useState("pending");
+  const pending = view === "pending";
+  return <section className="system2-page">
+    <button className="link-button" onClick={onBack}>← Voltar ao Modelo novo</button>
+    <span className="eyebrow">CONTROLE DE CONTEÚDO</span>
+    <h1>Questões aprovadas</h1>
+    <nav className="study-actions" aria-label="Situação no acervo">
+      <button type="button" className={pending ? "" : "light"} aria-pressed={pending} onClick={() => setView("pending")}>Aguardando promoção</button>
+      <button type="button" className={pending ? "light" : ""} aria-pressed={!pending} onClick={() => setView("promoted")}>Já no acervo</button>
+    </nav>
+    <System2ContentList key={view} supabase={supabase} view={view} />
+  </section>;
+}
+
+function System2ContentList({ supabase, view }) {
+  const { questions, loading, error, reload } = useSystem2Questions(supabase, view);
+  const pending = view === "pending";
+  return <>
+    <p className="system2-lead">{pending
+      ? "Revise as questões aprovadas e promova ao acervo as que estiverem prontas."
+      : "Consulte as questões que já foram promovidas. Alterações aqui afetam somente o Modelo novo."}</p>
+    <div className="system2-toolbar">
+      <p>{!loading && !error && <><b>{questions.length}</b> questão(ões) nesta lista.</>}</p>
+      <div><button className="light compact" disabled={loading} onClick={reload}>Atualizar dados</button></div>
+    </div>
+    {loading ? <p className="empty-state">Carregando questões…</p>
+      : error ? <p className="form-message">Não foi possível carregar as questões: {error}</p>
+      : questions.length ? <System2List items={questions} renderItem={(item) =>
+        <System2QuestionCardV2 key={item.id} item={item} supabase={supabase} onChanged={reload} allowPromote={pending} />} />
+      : <div className="card empty-state"><b>{pending ? "Nenhuma questão aguardando promoção." : "Nenhuma questão promovida ao acervo."}</b></div>}
+  </>;
 }
 
 export function System2Test({ supabase, onBack }) {

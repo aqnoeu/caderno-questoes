@@ -2,6 +2,10 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## Revisão de importações
+
+- Adiciona a fila administrativa de questões externas com conferência de preenchimento para objetivas, discursivas e peças.
+
 ## Fila de promoção — 2026-11-09
 
 - Separa questões aguardando promoção das que já estão no acervo.

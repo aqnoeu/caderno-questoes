@@ -1,3 +1,4 @@
+import { ExternalImportReview } from "./external-import-review";
 import { ObjectiveSuggestion } from "./objective-suggestion";
 import { EssaySuggestions, submitEssaySuggestions } from "./essay-suggestions";
 import React from "react";
@@ -242,7 +243,7 @@ const ADMIN_GROUPS=[
   {id:"gestao",label:"Gestão",home:"gestao-cadernos",items:[
     ["gestao-cadernos","Gerenciar cadernos"],["cadernos","Solicitações"],["essay-suggestions","Sugestões de questões"],
     ["questoes","Questões cadastradas"],["essay-library","Discursivas e peças cadastradas"],
-    ["desafios","Desafios"],["sistema2-content","Controle de conteúdo"],["sistema2-filter","Filtro IA"],
+    ["desafios","Desafios"],["sistema2-content","Controle de conteúdo"],["sistema2-filter","Filtro IA"],["external-import-review","Revisão de importações"],
     ["sistema2-test","Testar ciclo"],["ai-providers","Configurações das IAs"],
     ["creditos","Créditos de correção"]]},
   {id:"analise",label:"Análise",home:"admin-analise",items:[["admin-analise","Indicadores"],["overview","Acervo"],["ai-usage","Uso e limites de IA"]]},
@@ -680,6 +681,7 @@ function App() {
    onOpen={setAdminTab}/>}
   {adminTab === "admin-analise" && <AdminAnalytics supabase={supabase}/>}
   {adminTab === "ai-usage" && <AiUsage supabase={supabase}/> }
+  {adminTab === "external-import-review" && <ExternalImportReview supabase={supabase} />}
   {adminTab === "admin-financeiro" && <AdminFinance supabase={supabase}/>}
   {adminTab === "gestao-cadernos" && <AdminNotebookCatalog supabase={supabase} onReview={id=>{setReviewNotebookId(id);setAdminTab("cadernos");}}/>}
   {adminTab === "essay-suggestions" && (essaySuggestion

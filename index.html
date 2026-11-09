@@ -3,12 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f5f9ff" />
+    <meta name="theme-color" content="#173b73" />
+    <meta name="application-name" content="Caderno de Questões" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Caderno" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/caderno-192.png" />
+    <link rel="apple-touch-icon" href="/icons/caderno-192.png" />
     <meta name="description" content="Caderno de Questões — Estude. Resolva. Evolua." />
     <title>Caderno de Questões</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ("serviceWorker" in navigator && location.protocol === "https:") {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js", { scope: "/" })
+            .catch((error) => console.warn("PWA: registro indisponível", error));
+        });
+      }
+    </script>
   </body>
 </html>

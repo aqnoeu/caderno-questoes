@@ -121,7 +121,7 @@ export function NotificationCenter({ supabase, userId, onNavigate }) {
             {items.length === 0 && <p className="notification-empty">Tudo em dia! Seus próximos avisos aparecerão aqui. ✨</p>}
             {items.map((item) => <button key={item.id} type="button"
               className={"notification-item" + (!item.read_at ? " unread" : "")} onClick={() => markRead(item)}>
-              <span className="notification-emoji">{CATEGORIES.find(([id]) => id === item.category)?.[2] || "🔔"}</span>
+              <span className="notification-emoji">{CATEGORIES.find(([id]) => id === item.category)?.[2] || (item.category === "admin_review" ? "🛡️" : item.category === "notebook_status" ? "📘" : "🔔")}</span>
               <span className="notification-copy"><strong>{item.title}</strong><span>{item.body}</span>
                 <small>{formatTime(item.created_at)}</small></span>
               {!item.read_at && <i className="notification-dot" aria-label="Não lida" />}

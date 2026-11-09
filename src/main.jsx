@@ -12,6 +12,7 @@ import { ProvisionalCreator } from "./provisional";
 import { StudyPlanner } from "./study-planner";
 import { AdminNotebooks } from "./admin-notebooks";
 import { AdminNotebookCatalog } from "./admin-notebook-catalog";
+import { AdminAnalytics, AdminFinance, StudentSupport } from "./admin-operations";
 import { REVANCHE_ICON_PNG } from "./revenge-icon-png";
 import "./styles.css";
 
@@ -230,33 +231,51 @@ function parseAnswerKey(text) {
   return result;
 }
 
+const ADMIN_GROUPS=[
+  {id:"cadastro",label:"Cadastro",home:"admin-cadastro",items:[
+    ["sistema2-cadastro","Questões objetivas"],["essay-cadastro","Discursivas e peças"],
+    ["sistema2","Modelo de questões"]]},
+  {id:"gestao",label:"Gestão",home:"gestao-cadernos",items:[
+    ["gestao-cadernos","Gerenciar cadernos"],["cadernos","Solicitações"],
+    ["questoes","Questões cadastradas"],["essay-library","Discursivas e peças cadastradas"],
+    ["desafios","Desafios"],["sistema2-content","Controle de conteúdo"],["sistema2-filter","Filtro IA"],
+    ["sistema2-test","Testar ciclo"],["ai-providers","Configurações das IAs"],
+    ["creditos","Créditos de correção"]]},
+  {id:"analise",label:"Análise",home:"admin-analise",items:[["admin-analise","Indicadores"],["overview","Acervo"]]},
+  {id:"financeiro",label:"Financeiro",home:"admin-financeiro",items:[["admin-financeiro","Apoio voluntário"]]}
+];
 function AdminSidebar({ adminTab, setAdminTab, openUser }) {
-  const currentTabs = [["gestao-cadernos", "Gerenciar cadernos"], ["cadernos", "Solicitações de cadernos"], ["overview", "Visão geral"], ["questoes", "Questões publicadas"], ["essay-cadastro", "Discursivas e peças"], ["essay-library", "Discursivas e peças cadastradas"], ["desafios", "Desafios"], ["creditos", "Créditos IA"]];
-  const newTabs = [["sistema2", "Visão do modelo"], ["sistema2-cadastro", "Cadastro de questões"], ["sistema2-filter", "Filtro de IA"], ["sistema2-content", "Controle de conteúdo"], ["sistema2-test", "Testar ciclo"], ["ai-providers", "Configuração das IAs"]];
-  const [expanded,setExpanded]=React.useState(false);
-  React.useEffect(()=>setExpanded(false),[adminTab]);
-  const all=[...newTabs,...currentTabs];
-  const onChoose=(value)=>{setAdminTab(value);setExpanded(false);};
-  return <aside className="admin-sidebar">
-    <button className="admin-back" onClick={() => openUser("inicio")}>← Área do aluno</button>
-    <div className="admin-sidebar-head"><div><h2>Painel administrativo</h2><small>Gestão do acervo</small></div>
-      <button type="button" className="admin-mobile-toggle" aria-expanded={expanded}
-        onClick={()=>setExpanded(v=>!v)}>☰ {all.find(([id])=>id===adminTab)?.[1]||"Menu"} <span>{expanded?"−":"+"}</span></button>
+  const current=ADMIN_GROUPS.find(g=>g.items.some(([id])=>id===adminTab))||ADMIN_GROUPS[0];
+  return <aside className="admin-sidebar admin-grouped-sidebar">
+    <div className="admin-grouped-top">
+      <button className="admin-back" type="button" onClick={()=>openUser("inicio")}>← Área do aluno</button>
+      <div><h2>Administração</h2><small>Caderno de Questões</small></div>
     </div>
-    <div className={"admin-sidebar-menu"+(expanded?" expanded":"")}>
-      <span className="admin-section">Modelo oficial</span>
-      <div className="admin-subnav">{newTabs.map(([id,label])=><button key={id}
-        className={adminTab===id?"active":""} onClick={()=>onChoose(id)}>{label}</button>)}</div>
-      <span className="admin-section">Gestão do acervo</span>
-      {currentTabs.map(([id,label])=><button key={id} className={adminTab===id?"active":""}
-        onClick={()=>onChoose(id)}>{label}</button>)}
-    </div>
+    <nav className="admin-group-tabs" aria-label="Áreas administrativas">
+      {ADMIN_GROUPS.map(group=><button type="button" key={group.id}
+        className={group.id===current.id?"active":""} aria-current={group.id===current.id?"page":undefined}
+        onClick={()=>setAdminTab(group.home)}>{group.label}</button>)}
+    </nav>
+    <nav className="admin-group-subnav" aria-label={"Opções de "+current.label}>
+      {current.items.map(([id,label])=><button type="button" key={id}
+        className={id===adminTab?"active":""} onClick={()=>setAdminTab(id)}>{label}</button>)}
+    </nav>
   </aside>;
 }
+function AdminLanding({title,description,items,onOpen}){
+ return <section className="admin-landing">
+  <div><span className="eyebrow">ADMINISTRAÇÃO</span><h1>{title}</h1><p>{description}</p></div>
+  <div className="admin-landing-grid">{items.map(([id,label,detail])=>
+   <button type="button" key={id} className="card" onClick={()=>onOpen(id)}>
+    <strong>{label}</strong><span>{detail}</span><span aria-hidden="true">›</span>
+   </button>)}</div>
+ </section>;
+}
+
 function UserHub({ profile, isAdmin, go, admin }) {
   const items=[["inicio","home","Início"],["desempenho","bars","Desempenho"],
     ["revanche","cycle","Modo Revanche"],["cadernos","document","Meus cadernos"],
-    ["configuracoes","settings","Configurações"]];
+    ["configuracoes","settings","Configurações"],["apoio","heart","Apoiar o projeto"]];
   return <section className="card user-hub">
     <span className="eyebrow">MINHA ÁREA</span>
     <h1>Perfil</h1>
@@ -265,7 +284,7 @@ function UserHub({ profile, isAdmin, go, admin }) {
       <button key={id} type="button" onClick={()=>go(id)}>
         <LineIcon name={icon} size={22}/><span>{label}</span><span aria-hidden="true">›</span>
       </button>)}
-      {isAdmin&&<button type="button" onClick={()=>admin("cadernos")}>
+      {isAdmin&&<button type="button" onClick={()=>admin("admin-analise")}>
         <LineIcon name="settings" size={22}/><span>Painel administrativo</span><span aria-hidden="true">›</span>
       </button>}
     </div>
@@ -276,7 +295,7 @@ function App() {
   const [session, setSession] = React.useState(undefined),
     [tab, setTab] = React.useState("inicio"),
     [revengeCycleId, setRevengeCycleId] = React.useState(""),
-    [adminTab, setAdminTab] = React.useState("sistema2"),
+    [adminTab, setAdminTab] = React.useState("admin-analise"),
     [reviewNotebookId, setReviewNotebookId] = React.useState(null),
     [area, setArea] = React.useState("user"),
     [profile, setProfile] = React.useState(undefined),
@@ -548,7 +567,7 @@ function App() {
     }
     return !error;
   }
-  function openAdmin(target = "sistema2") {
+  function openAdmin(target = "admin-analise") {
     if (!isAdmin) return setNotice("Acesso restrito ao administrador.");
     setArea("admin");
     setAdminTab(target);
@@ -563,6 +582,7 @@ function App() {
   }
   async function navigateNotification(destination, notebookId, details = {}) {
     if(destination === "admin_notebooks" && isAdmin){openAdmin("cadernos");return;}
+    if(destination === "apoio"){openUser("apoio");return;}
     if (notebookId && notebookId !== notebooks.notebook?.id) {
       const book = notebooks.catalog.find((item) => item.id === notebookId);
       if (!book || !notebooks.memberships.some((member) => member.notebook_id === notebookId)) {
@@ -617,7 +637,7 @@ function App() {
           <button onClick={() => setNotice("")}>×</button>
         </div>
       )}
-      {area === "user" ? <>{tab === "edital" ? <ProvisionalCreator supabase={supabase} userId={session.user.id} questions={questions} onCreated={edictCreated} onCancel={() => setTab("inicio")} onFinish={() => setTab("inicio")} onPlanNow={() => setTab("planejamento")} /> : tab === "perfil" ? <UserHub profile={profile} isAdmin={isAdmin} go={(target)=>setTab(target)} admin={openAdmin}/> : tab === "configuracoes" ? <UserProfile profile={profile} session={session} supabase={supabase} onProfileSaved={(values) => setProfile((current) => ({ ...current, ...values }))} /> : !notebooks.notebook ? <NotebookWelcome state={notebooks} onCreate={openEdict} /> : <><NotebookSwitcher state={notebooks} onCreate={openEdict} />
+      {area === "user" ? <>{tab === "edital" ? <ProvisionalCreator supabase={supabase} userId={session.user.id} questions={questions} onCreated={edictCreated} onCancel={() => setTab("inicio")} onFinish={() => setTab("inicio")} onPlanNow={() => setTab("planejamento")} /> : tab === "perfil" ? <UserHub profile={profile} isAdmin={isAdmin} go={(target)=>setTab(target)} admin={openAdmin}/> : tab === "configuracoes" ? <UserProfile profile={profile} session={session} supabase={supabase} onProfileSaved={(values) => setProfile((current) => ({ ...current, ...values }))} /> : tab === "apoio" ? <StudentSupport supabase={supabase} onBack={()=>setTab("perfil")} /> : !notebooks.notebook ? <NotebookWelcome state={notebooks} onCreate={openEdict} /> : <><NotebookSwitcher state={notebooks} onCreate={openEdict} />
         {tab === "inicio" && <UserHome questions={userQuestions} notebookId={notebooks.notebook.id} userId={session.user.id} name={profile?.display_name} email={profile?.email || session.user.email} supabase={supabase} goStudy={() => setTab("estudos")} goPerformance={() => setTab("desempenho")} goChallenge={() => setTab("desafio")} goRevenge={() => openRevenge()} />}
         <div hidden={tab !== "estudos"}><Study key={notebooks.notebook.id} questions={userQuestions} notebookId={notebooks.notebook.id} supabase={supabase} userId={session.user.id} onRevenge={openRevenge} /></div>
         {tab === "revanche" && <RevengeMode key={notebooks.notebook.id} supabase={supabase} userId={session.user.id} notebookId={notebooks.notebook.id} initialCycleId={revengeCycleId} onBack={() => setTab("estudos")} />}
@@ -626,7 +646,16 @@ function App() {
         {tab === "desempenho" && <Performance questions={userQuestions} notebookId={notebooks.notebook.id} userId={session.user.id} supabase={supabase} goStudy={() => setTab("estudos")} />}
         {tab === "planejamento" && <StudyPlanner key={notebooks.notebook.id} supabase={supabase} userId={session.user.id} notebookId={notebooks.notebook.id} questions={userQuestions} />}
         {tab === "cadernos" && <NotebookWelcome state={notebooks} onCreate={openEdict} />}
-      </>}</> : isAdmin ? <section className="admin-layout"><AdminSidebar adminTab={adminTab} setAdminTab={setAdminTab} openUser={openUser} /><div className="admin-content">{adminTab === "gestao-cadernos" && <AdminNotebookCatalog supabase={supabase} onReview={id=>{setReviewNotebookId(id);setAdminTab("cadernos");}}/>}
+      </>}</> : isAdmin ? <section className="admin-layout"><AdminSidebar adminTab={adminTab} setAdminTab={setAdminTab} openUser={openUser} /><div className="admin-content">
+  {adminTab === "admin-cadastro" && <AdminLanding title="Cadastro" description="Escolha a modalidade que deseja cadastrar."
+   items={[["sistema2-cadastro","Questões objetivas","Importe provas, gabaritos e revise alternativas."],["essay-cadastro","Discursivas e peças","Cadastre questões discursivas e peças prático-profissionais."]]}
+   onOpen={setAdminTab}/>}
+  {adminTab === "gestao-hub" && <AdminLanding title="Gestão" description="Organize e acompanhe o acervo já cadastrado."
+   items={[["gestao-cadernos","Gerenciar cadernos","Cadernos oficiais e provisórios."],["questoes","Questões cadastradas","Edição, revisão e visibilidade."],["essay-library","Discursivas e peças","Consulta e administração."],["cadernos","Solicitações","Aprovar cadernos e vincular questões."]]}
+   onOpen={setAdminTab}/>}
+  {adminTab === "admin-analise" && <AdminAnalytics supabase={supabase}/>}
+  {adminTab === "admin-financeiro" && <AdminFinance supabase={supabase}/>}
+  {adminTab === "gestao-cadernos" && <AdminNotebookCatalog supabase={supabase} onReview={id=>{setReviewNotebookId(id);setAdminTab("cadernos");}}/>}
   {adminTab === "cadernos" && <AdminNotebooks supabase={supabase} questions={questions} focusNotebookId={reviewNotebookId} />}{adminTab === "overview" && <AdminOverview questions={questions} supabase={supabase} />}{adminTab === "cadastro" && cadastroContent}{adminTab === "questoes" && <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} supabase={supabase} />}{adminTab === "essay-cadastro" && <EssayAdmin supabase={supabase} />}{adminTab === "essay-library" && <EssayLibrary supabase={supabase} />}{adminTab === "desafios" && <ChallengeAdmin supabase={supabase} />}{adminTab === "creditos" && <CorrectionCreditsAdmin supabase={supabase} />}{adminTab === "sistema2" && <System2Home openCadastro={() => setAdminTab("sistema2-cadastro")} openFilter={() => setAdminTab("sistema2-filter")} openContent={() => setAdminTab("sistema2-content")} />}{adminTab === "sistema2-cadastro" && <System2Cadastro supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "sistema2-filter" && <System2Filter supabase={supabase} onBack={() => setAdminTab("sistema2")} openContent={() => setAdminTab("sistema2-content")} />}{adminTab === "sistema2-content" && <System2Content supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "sistema2-test" && <System2Test supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "ai-providers" && <AiProviderSettings supabase={supabase} />}</div></section> : <section className="card"><h2>Acesso restrito</h2><p>Esta área é exclusiva para administradores.</p><button onClick={() => openUser("inicio")}>Voltar ao início</button></section>}
     </main>
   );

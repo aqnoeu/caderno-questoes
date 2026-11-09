@@ -78,45 +78,65 @@ Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
   if (request.method !== "POST") return json({ error: "Método inválido." }, 405);
 
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL") || "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
+    {
+      auth: { persistSession: false },
+    },
+  );
+  const table = admin.from("external_question_imports");
+  let claim: { id: string; revision: string; review_claim: string } | undefined;
   try {
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL") || "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
-      {
-        auth: { persistSession: false },
-      },
-    );
-    const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-    if (!token) return json({ error: "Sessão inválida." }, 401);
-    const { data: auth } = await admin.auth.getUser(token);
-    if (!auth.user) return json({ error: "Sessão inválida." }, 401);
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("role")
-      .eq("id", auth.user.id)
-      .maybeSingle();
-    if (profile?.role !== "admin") return json({ error: "Acesso restrito ao administrador." }, 403);
+    const schedulerKey = request.headers.get("x-import-cron-key");
+    const scheduled = schedulerKey !== null;
+    if (scheduled) {
+      const { data: timer } = await admin
+        .from("external_import_timer")
+        .select("cron_secret")
+        .eq("id", true)
+        .single();
+      if (!timer?.cron_secret || schedulerKey !== timer.cron_secret)
+        return json({ error: "Acesso não autorizado." }, 401);
+    } else {
+      const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      if (!token) return json({ error: "Sessão inválida." }, 401);
+      const { data: auth } = await admin.auth.getUser(token);
+      if (!auth?.user) return json({ error: "Sessão inválida." }, 401);
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("role")
+        .eq("id", auth.user.id)
+        .maybeSingle();
+      if (profile?.role !== "admin")
+        return json({ error: "Acesso restrito ao administrador." }, 403);
+    }
 
-    const { id } = await request.json().catch(() => ({}));
-    if (typeof id !== "string" || !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id)) {
+    const body = await request.json().catch(() => ({}));
+    const id = scheduled ? null : body?.id;
+    if (
+      !scheduled &&
+      (typeof id !== "string" || !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id))
+    ) {
       return json({ error: "Importação inválida." }, 400);
     }
-    const table = admin.from("external_question_imports");
-    const { data: row, error } = await table
-      .select("id,modality,payload,revision,status")
-      .eq("id", id)
-      .maybeSingle();
+    const { data, error } = await admin.rpc("claim_external_import_review", { p_id: id });
     if (error) throw error;
-    if (!row || row.status === "released") return json({ error: "Importação indisponível." }, 404);
-    if (row.status === "ready") return json({ status: "ready", missing_fields: [] });
+    const row = data?.[0];
+    if (!row)
+      return scheduled
+        ? json({ claimed: false })
+        : json({ error: "Questão indisponível ou em conferência." }, 409);
+    claim = row;
 
     const checks = checklist(row.payload, row.modality);
     const missing = Object.keys(checks).filter((field) => !checks[field]);
     if (!missing.length) {
       const key = Deno.env.get("GROQ_API_KEY");
-      if (!key) return json({ error: "Groq indisponível para conferência." }, 503);
+      if (!key) throw new Error("Groq indisponível para conferência.");
       const response = await fetchAi("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
+        signal: AbortSignal.timeout(90000),
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           model: Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b",
@@ -140,17 +160,18 @@ Deno.serve(async (request) => {
         }),
       });
       if (!response.ok)
-        return json({ error: "O Groq não concluiu a conferência. Tente novamente." }, 503);
+        throw new Error(
+          response.status === 429
+            ? "Limite do Groq atingido."
+            : "O Groq não concluiu a conferência.",
+        );
       const data = await response.json();
       const result = JSON.parse(data.choices?.[0]?.message?.content || "null");
       if (
         !Array.isArray(result?.missing_fields) ||
         result.missing_fields.some((field: string) => !Object.hasOwn(checks, field))
       ) {
-        return json(
-          { error: "A conferência retornou um resultado inválido. Tente novamente." },
-          502,
-        );
+        throw new Error("A conferência retornou um resultado inválido.");
       }
       missing.push(...new Set<string>(result.missing_fields));
     }
@@ -160,17 +181,44 @@ Deno.serve(async (request) => {
         status,
         missing_fields: missing,
         reviewed_at: new Date().toISOString(),
+        review_claim: null,
+        review_claim_until: null,
+        review_retry_at: null,
+        review_error: null,
       })
       .eq("id", id)
       .eq("revision", row.revision)
-      .in("status", ["pending", "incomplete"])
+      .eq("review_claim", row.review_claim)
+      .eq("status", "pending")
       .select("id")
       .maybeSingle();
     if (updateError) throw updateError;
     if (!updated)
       return json({ error: "A importação mudou durante a conferência. Atualize a lista." }, 409);
     return json({ status, missing_fields: missing });
-  } catch {
-    return json({ error: "Não foi possível conferir a importação." }, 500);
+  } catch (error) {
+    const message =
+      error instanceof Error &&
+      [
+        "Groq indisponível para conferência.",
+        "Limite do Groq atingido.",
+        "O Groq não concluiu a conferência.",
+        "A conferência retornou um resultado inválido.",
+      ].includes(error.message)
+        ? error.message
+        : "Não foi possível conferir a importação.";
+    if (claim) {
+      await table
+        .update({
+          review_claim: null,
+          review_claim_until: null,
+          review_retry_at: new Date(Date.now() + 10 * 60000).toISOString(),
+          review_error: message,
+        })
+        .eq("id", claim.id)
+        .eq("revision", claim.revision)
+        .eq("review_claim", claim.review_claim);
+    }
+    return json({ error: message }, 503);
   }
 });

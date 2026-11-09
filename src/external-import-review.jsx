@@ -10,6 +10,9 @@ const labels = {
 };
 
 export function ExternalImportReview({ supabase }) {
+  const [timer, setTimer] = React.useState(null);
+  const [interval, setIntervalMinutes] = React.useState("");
+  const [now, setNow] = React.useState(Date.now);
   const [rows, setRows] = React.useState([]);
   const [view, setView] = React.useState("pending");
   const [busy, setBusy] = React.useState(false);
@@ -17,7 +20,9 @@ export function ExternalImportReview({ supabase }) {
   const load = React.useCallback(async () => {
     const { data, error } = await supabase
       .from("external_question_imports")
-      .select("id,batch_name,modality,payload,revision,status,missing_fields,created_at")
+      .select(
+        "id,batch_name,modality,payload,revision,status,missing_fields,created_at,review_claim_until,review_retry_at,review_error",
+      )
       .eq("status", view)
       .order("created_at", { ascending: false });
     if (error) setMessage(error.message);
@@ -27,6 +32,59 @@ export function ExternalImportReview({ supabase }) {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  const loadTimer = React.useCallback(async () => {
+    const { data, error } = await supabase
+      .from("external_import_timer")
+      .select("enabled,interval_minutes,last_started_at")
+      .eq("id", true)
+      .single();
+    if (error) setMessage(error.message);
+    else setTimer(data);
+  }, [supabase]);
+
+  React.useEffect(() => {
+    loadTimer();
+    const refresh = window.setInterval(() => {
+      load();
+      loadTimer();
+    }, 15000);
+    return () => window.clearInterval(refresh);
+  }, [load, loadTimer]);
+
+  React.useEffect(() => {
+    const clock = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(clock);
+  }, []);
+
+  async function saveTimer(event) {
+    event.preventDefault();
+    const enabled = event.nativeEvent.submitter?.value !== "pause";
+    const interval_minutes = Number(interval || timer.interval_minutes);
+    setBusy(true);
+    try {
+      const { error } = await supabase
+        .from("external_import_timer")
+        .update({ enabled, interval_minutes })
+        .eq("id", true);
+      if (error) throw error;
+      setIntervalMinutes("");
+      await loadTimer();
+      setMessage(enabled ? "Conferência automática ativada." : "Conferência automática pausada.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const seconds = Math.max(
+    0,
+    Math.ceil(
+      ((Date.parse(timer?.last_started_at) || 0) + (timer?.interval_minutes || 0) * 60000 - now) /
+        1000,
+    ),
+  );
 
   async function act(row, action) {
     setBusy(true);
@@ -60,7 +118,7 @@ export function ExternalImportReview({ supabase }) {
             : "Questão cadastrada no caderno.",
         );
       }
-      await load();
+      await Promise.all([load(), loadTimer()]);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -76,6 +134,39 @@ export function ExternalImportReview({ supabase }) {
         Confira o preenchimento das objetivas, discursivas e peças cadastradas pelo assistente. A
         conferência aponta campos faltantes e textos provisórios.
       </p>
+      {timer && (
+        <form className="card system2-form" onSubmit={saveTimer}>
+          <h2>Conferência automática com Groq</h2>
+          <p>
+            {timer.enabled
+              ? seconds > 0
+                ? `Próxima questão elegível em ${Math.floor(seconds / 60)} min e ${seconds % 60} s.`
+                : "Fila elegível para a próxima verificação do servidor."
+              : "Automação pausada."}
+          </p>
+          <label>
+            Intervalo entre questões (minutos)
+            <input
+              type="number"
+              min="1"
+              max="60"
+              required
+              value={interval || timer.interval_minutes}
+              onChange={(event) => setIntervalMinutes(event.target.value)}
+            />
+          </label>
+          <div className="study-actions">
+            <button type="submit" disabled={busy}>
+              {timer.enabled ? "Salvar intervalo" : "Ativar conferência"}
+            </button>
+            {timer.enabled && (
+              <button type="submit" value="pause" className="light" disabled={busy}>
+                Pausar
+              </button>
+            )}
+          </div>
+        </form>
+      )}
       <nav className="study-actions" aria-label="Situação da importação">
         {Object.entries(labels).map(([key, label]) => (
           <button
@@ -120,7 +211,7 @@ export function ExternalImportReview({ supabase }) {
                 key={row.id}
                 item={item}
                 importReview={{
-                  label: labels[row.status],
+                  label: row.review_error || labels[row.status],
                   modality: types[row.modality],
                   batch: row.batch_name,
                   objective,
@@ -136,10 +227,12 @@ export function ExternalImportReview({ supabase }) {
                       <button
                         type="button"
                         className="compact"
-                        disabled={busy}
+                        disabled={busy || Date.parse(row.review_claim_until) > now}
                         onClick={() => act(row, "check")}
                       >
-                        Conferir preenchimento
+                        {Date.parse(row.review_claim_until) > now
+                          ? "Em conferência…"
+                          : "Conferir preenchimento"}
                       </button>
                     ) : row.status === "ready" ? (
                       <button

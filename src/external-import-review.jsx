@@ -1,5 +1,5 @@
 import React from "react";
-import { resolveNotebookV63 } from "./system2";
+import { resolveNotebookV63, System2List, System2QuestionCardV2 } from "./system2";
 
 const types = { objective: "Objetiva", discursive: "Discursiva", piece: "Peça processual" };
 const labels = {
@@ -17,7 +17,7 @@ export function ExternalImportReview({ supabase }) {
   const load = React.useCallback(async () => {
     const { data, error } = await supabase
       .from("external_question_imports")
-      .select("id,batch_name,modality,payload,revision,status,missing_fields")
+      .select("id,batch_name,modality,payload,revision,status,missing_fields,created_at")
       .eq("status", view)
       .order("created_at", { ascending: false });
     if (error) setMessage(error.message);
@@ -99,40 +99,138 @@ export function ExternalImportReview({ supabase }) {
       </button>
       {message && <p role="status">{message}</p>}
       {rows.length === 0 && <p>Nenhuma importação nesta lista.</p>}
-      {rows
-        .filter((row) => row.status === view)
-        .map((row) => (
-          <article className="card system2-form" key={row.id}>
-            <h2>
-              {row.batch_name} · {types[row.modality]}
-              {row.payload.question_number ? ` ${row.payload.question_number}` : ""}
-            </h2>
-            <p className="essay-suggestion-text">{row.payload.statement}</p>
-            <details>
-              <summary>Conferir campos cadastrados</summary>
-              <pre className="essay-suggestion-text">{JSON.stringify(row.payload, null, 2)}</pre>
-            </details>
-            {row.missing_fields.length > 0 && (
-              <ul>
-                {row.missing_fields.map((field) => (
-                  <li key={field}>{field}</li>
-                ))}
-              </ul>
-            )}
-            {view === "pending" && (
-              <button type="button" disabled={busy} onClick={() => act(row, "check")}>
-                Conferir preenchimento
-              </button>
-            )}
-            {view === "ready" && (
-              <button type="button" disabled={busy} onClick={() => act(row, "release")}>
-                {row.modality === "objective"
-                  ? "Encaminhar ao Controle de Conteúdo"
-                  : "Cadastrar no acervo"}
-              </button>
-            )}
-          </article>
-        ))}
+      {rows.some((row) => row.status === view) && (
+        <System2List
+          key={view}
+          items={rows
+            .filter((row) => row.status === view)
+            .map((row) => ({
+              ...row.payload,
+              id: row.id,
+              status: row.status,
+              created_at: row.created_at,
+              import: row.payload,
+              row,
+            }))}
+          renderItem={(item) => {
+            const row = item.row;
+            const objective = row.modality === "objective";
+            return (
+              <System2QuestionCardV2
+                key={row.id}
+                item={item}
+                importReview={{
+                  label: labels[row.status],
+                  modality: types[row.modality],
+                  batch: row.batch_name,
+                  objective,
+                  details: (
+                    <ImportQuestionDetails
+                      item={item}
+                      objective={objective}
+                      missing={row.missing_fields}
+                    />
+                  ),
+                  actions:
+                    row.status === "pending" ? (
+                      <button
+                        type="button"
+                        className="compact"
+                        disabled={busy}
+                        onClick={() => act(row, "check")}
+                      >
+                        Conferir preenchimento
+                      </button>
+                    ) : row.status === "ready" ? (
+                      <button
+                        type="button"
+                        className="compact"
+                        disabled={busy}
+                        onClick={() => act(row, "release")}
+                      >
+                        {objective ? "Encaminhar ao Controle de Conteúdo" : "Cadastrar no acervo"}
+                      </button>
+                    ) : null,
+                }}
+              />
+            );
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+function ImportQuestionDetails({ item, objective, missing }) {
+  return (
+    <div className="system2-editor">
+      <p className="essay-suggestion-text">{item.statement}</p>
+      {missing.length > 0 && (
+        <section className="system2-analysis-details open">
+          <h3>Campos pendentes</h3>
+          <ul>
+            {missing.map((field) => (
+              <li key={field}>{field}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {objective ? (
+        <>
+          {item.answer_key_option && (
+            <span className="system2-correct-key">Resposta correta: {item.answer_key_option}</span>
+          )}
+          {(Array.isArray(item.alternatives) ? item.alternatives : []).map((option, index) => {
+            const diagnosis = item.option_error_analysis?.[option?.letter];
+            return (
+              <section className="system2-option-diagnostic" key={index}>
+                <b>
+                  {option?.letter}) {option?.text}
+                </b>
+                {diagnosis?.wrong_reasoning && (
+                  <p>
+                    <strong>Raciocínio que leva ao erro</strong> {diagnosis.wrong_reasoning}
+                  </p>
+                )}
+                {diagnosis?.student_feedback && <p>{diagnosis.student_feedback}</p>}
+                {diagnosis?.study_content && (
+                  <p>
+                    <strong>Conteúdo de estudo</strong> {diagnosis.study_content}
+                  </p>
+                )}
+              </section>
+            );
+          })}
+          <section className="system2-analysis-details open">
+            <h3>Informações de acerto</h3>
+            <p>{item.central_rule}</p>
+            <p>{item.legal_basis}</p>
+            <p>{item.correct_answer_explanation}</p>
+          </section>
+        </>
+      ) : (
+        <section className="system2-analysis-details open">
+          <h3>Espelho de resposta</h3>
+          <p className="essay-suggestion-text">{item.answer_key_text}</p>
+          {item.official_commentary && (
+            <p className="essay-suggestion-text">{item.official_commentary}</p>
+          )}
+          {item.total_points != null && (
+            <p>
+              <strong>Pontuação total</strong> {item.total_points}
+            </p>
+          )}
+          {(Array.isArray(item.rubrics) ? item.rubrics : []).map((rubric, index) => (
+            <div className="system2-option-diagnostic" key={index}>
+              <b>
+                {rubric?.criterion} · {rubric?.max_points} ponto(s)
+              </b>
+              <p>{rubric?.expected_content}</p>
+              <p>{rubric?.legal_basis}</p>
+            </div>
+          ))}
+        </section>
+      )}
+    </div>
   );
 }

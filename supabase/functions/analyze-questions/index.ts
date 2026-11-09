@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackAiFetch } from "../_shared/ai-usage.ts";
+
+const fetchAi = trackAiFetch("analyze-questions");
 
 // Classificação por IA do cadastro de questões objetivas (tela "Cadastro" do administrador).
 // Recriada na v53: o site já chamava esta função, mas ela não existia no Supabase nem no repositório.
@@ -21,7 +24,7 @@ class GeminiError extends Error { constructor(public status: number, message: st
 async function askGemini(apiKey: string, prompt: string): Promise<any> {
   let status = 500, message = "Erro Gemini";
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    const response = await fetchAi(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", temperature: 0.1 } }),

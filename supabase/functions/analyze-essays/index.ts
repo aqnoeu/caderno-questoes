@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackAiFetch } from "../_shared/ai-usage.ts";
+
+const fetchAi = trackAiFetch("analyze-essays");
 
 // v53: restrita ao administrador, com nova tentativa quando o modelo está ocupado e leitura segura do JSON.
 
@@ -18,7 +21,7 @@ class GeminiError extends Error { constructor(public status: number, message: st
 async function askGemini(apiKey: string, prompt: string): Promise<any> {
   let status = 500, message = "Erro Gemini";
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    const response = await fetchAi(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", temperature: 0.05 } }),
@@ -42,7 +45,7 @@ const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
 async function askGroq(prompt: string) {
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw new Error("GROQ_API_KEY não configurada.");
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions",{
+  const response = await fetchAi("https://api.groq.com/openai/v1/chat/completions",{
     method:"POST",
     headers:{ Authorization:`Bearer ${key}`, "Content-Type":"application/json" },
     body:JSON.stringify({ model:GROQ_MODEL,messages:[{role:"system",content:"Organize os dados jurídicos em JSON válido, sem inventar critérios ou pontuação."},{role:"user",content:prompt}],response_format:{type:"json_object"},temperature:0.05 })

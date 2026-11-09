@@ -1707,3 +1707,15 @@ body{overflow-x:hidden}
 .support-popup::backdrop {
   background: rgb(15 23 42 / 55%);
 }
+
+.ai-usage .card {
+  overflow-wrap: anywhere;
+}
+.ai-usage-table {
+  overflow-x: auto;
+}
+.ai-usage-table th,
+.ai-usage-table td {
+  padding: 10px;
+  text-align: left;
+}

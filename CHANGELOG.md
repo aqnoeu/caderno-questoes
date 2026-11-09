@@ -2,6 +2,10 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## Uso e limites de IA — 2026-11-09
+
+- Painel administrativo com chamadas, tokens informados, erros de cota e limites por provedor e modelo. A coleta começa após a atualização das funções.
+
 ## Pix e campanhas de apoio — 2026-11-09
 
 - Página de apoio com título e mensagem editáveis, chave Pix aleatória opcional e campanhas independentes com envio pela central ou em pop-up.

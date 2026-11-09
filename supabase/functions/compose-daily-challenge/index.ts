@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackAiFetch } from "../_shared/ai-usage.ts";
+
+const fetchAi = trackAiFetch("compose-daily-challenge");
 
 // v55: a IA escolhe as afirmações do desafio do dia entre as APROVADAS do banco de desafios (criadas à mão, em lote ou adaptadas pela IA).
 // Só o administrador chama. O resultado é salvo como RASCUNHO para a data pedida; quem publica é o administrador.
@@ -22,7 +25,7 @@ class GeminiError extends Error { constructor(public status: number, message: st
 async function askGemini(apiKey: string, prompt: string, temperature = 0.3): Promise<any> {
   let status = 500;
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    const response = await fetchAi(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", temperature } }),
@@ -46,7 +49,7 @@ const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "llama-3.3-70b-versatile";
 const AI_ROUTE = (Deno.env.get("AI_ROTA_DESAFIO") || "auto").toLowerCase();
 
 async function askGroq(apiKey: string, prompt: string, temperature: number): Promise<any> {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const response = await fetchAi("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
     body: JSON.stringify({ model: GROQ_MODEL, temperature, response_format: { type: "json_object" }, messages: [{ role: "system", content: "Responda sempre em português do Brasil e somente com um objeto JSON válido." }, { role: "user", content: prompt }] }),

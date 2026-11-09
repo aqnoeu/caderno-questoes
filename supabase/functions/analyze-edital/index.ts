@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { trackAiFetch } from "../_shared/ai-usage.ts";
+
+const fetchAi = trackAiFetch("analyze-edital");
 const MODEL=Deno.env.get("GROQ_MODEL")||"openai/gpt-oss-120b";
 const SITE=Deno.env.get("SITE_ORIGIN")||"https://caderno-questoes.vercel.app";
 
@@ -17,7 +20,7 @@ async function groq(prompt:string,maxTokens=4800){
  let lastError="Não foi possível analisar o edital neste momento.";
  for(const model of models){
   try{
-   const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{
+   const r=await fetchAi("https://api.groq.com/openai/v1/chat/completions",{
     method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+apiKey},
     body:JSON.stringify({
      model,temperature:0.05,max_completion_tokens:Math.min(maxTokens,2600),

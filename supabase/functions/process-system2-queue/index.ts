@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { trackAiFetch } from "../_shared/ai-usage.ts";
+
+const fetchAi = trackAiFetch("process-system2-queue");
 
 const SITE_ORIGIN = Deno.env.get("SITE_ORIGIN") || "https://caderno-questoes.vercel.app";
 const MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash";
@@ -13,7 +16,7 @@ const cleanList = (value: unknown) => Array.isArray(value) ? value.map((item) =>
 async function askGemini(apiKey: string, prompt: string) {
   let status = 500, message = "Falha na análise pelo Gemini.";
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, { method:"POST", headers:{ "Content-Type":"application/json", "x-goog-api-key":apiKey }, body:JSON.stringify({ contents:[{ parts:[{ text:prompt }] }], generationConfig:{ responseMimeType:"application/json", temperature:.08 } }) });
+    const response = await fetchAi(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, { method:"POST", headers:{ "Content-Type":"application/json", "x-goog-api-key":apiKey }, body:JSON.stringify({ contents:[{ parts:[{ text:prompt }] }], generationConfig:{ responseMimeType:"application/json", temperature:.08 } }) });
     const data = await response.json().catch(() => ({}));
     if (response.ok) {
       const text = String(data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -31,7 +34,7 @@ const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
 async function askGroq(prompt: string) {
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw new Error("GROQ_API_KEY não configurada.");
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const response = await fetchAi("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model:GROQ_MODEL, messages:[{ role:"system", content:"Responda exclusivamente em JSON válido. Não invente fundamentos jurídicos." },{ role:"user",content:prompt }], response_format:{ type:"json_object" }, temperature:0.08 }),

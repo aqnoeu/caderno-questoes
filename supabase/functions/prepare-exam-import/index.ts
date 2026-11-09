@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { trackAiFetch } from "../_shared/ai-usage.ts";
+
+const fetchAi = trackAiFetch("prepare-exam-import");
 const SITE_ORIGIN = Deno.env.get("SITE_ORIGIN") || "https://caderno-questoes.vercel.app";
 const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash";
@@ -27,7 +30,7 @@ async function analyze(provider: string, prompt: string) {
   if (provider === "gemini") {
     const key = Deno.env.get("GEMINI_API_KEY");
     if (!key) throw new Error("GEMINI_API_KEY ausente.");
-    const response = await fetch(
+    const response = await fetchAi(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
       {
         method: "POST",
@@ -44,7 +47,7 @@ async function analyze(provider: string, prompt: string) {
   }
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw new Error("GROQ_API_KEY ausente.");
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const response = await fetchAi("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({

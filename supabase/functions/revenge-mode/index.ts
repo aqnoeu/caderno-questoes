@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { trackAiFetch } from "../_shared/ai-usage.ts";
+
+const fetchAi = trackAiFetch("revenge-mode");
 const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
 const answer = (request, body, status = 200) => {
   const origin = request.headers.get("Origin") || "";
@@ -61,7 +64,7 @@ async function groq(prompt, purpose = "generation") {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 45000);
     try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const response = await fetchAi("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         signal: controller.signal,
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },

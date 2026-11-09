@@ -10,6 +10,7 @@ import { AiProviderSettings } from "./ai-settings";
 import { useNotebooks, NotebookWelcome, NotebookSwitcher } from "./notebooks";
 import { RevengeMode } from "./revenge";
 import { NotificationCenter } from "./notifications";
+import { AiUsage } from "./ai-usage";
 import { ProvisionalCreator } from "./provisional";
 import { StudyPlanner } from "./study-planner";
 import { AdminNotebooks } from "./admin-notebooks";
@@ -243,7 +244,7 @@ const ADMIN_GROUPS=[
     ["desafios","Desafios"],["sistema2-content","Controle de conteúdo"],["sistema2-filter","Filtro IA"],
     ["sistema2-test","Testar ciclo"],["ai-providers","Configurações das IAs"],
     ["creditos","Créditos de correção"]]},
-  {id:"analise",label:"Análise",home:"admin-analise",items:[["admin-analise","Indicadores"],["overview","Acervo"]]},
+  {id:"analise",label:"Análise",home:"admin-analise",items:[["admin-analise","Indicadores"],["overview","Acervo"],["ai-usage","Uso e limites de IA"]]},
   {id:"financeiro",label:"Financeiro",home:"admin-financeiro",items:[["admin-financeiro","Apoio voluntário"]]}
 ];
 function AdminSidebar({ adminTab, setAdminTab, openUser }) {
@@ -677,6 +678,7 @@ function App() {
    items={[["gestao-cadernos","Gerenciar cadernos","Cadernos oficiais e provisórios."],["questoes","Questões cadastradas","Edição, revisão e visibilidade."],["essay-library","Discursivas e peças","Consulta e administração."],["cadernos","Solicitações","Aprovar cadernos e vincular questões."]]}
    onOpen={setAdminTab}/>}
   {adminTab === "admin-analise" && <AdminAnalytics supabase={supabase}/>}
+  {adminTab === "ai-usage" && <AiUsage supabase={supabase}/> }
   {adminTab === "admin-financeiro" && <AdminFinance supabase={supabase}/>}
   {adminTab === "gestao-cadernos" && <AdminNotebookCatalog supabase={supabase} onReview={id=>{setReviewNotebookId(id);setAdminTab("cadernos");}}/>}
   {adminTab === "essay-suggestions" && (essaySuggestion

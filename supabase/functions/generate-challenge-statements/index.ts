@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackAiFetch } from "../_shared/ai-usage.ts";
+
+const fetchAi = trackAiFetch("generate-challenge-statements");
 
 // v55: adapta questões já cadastradas (acervo atual ou Modelo novo) em afirmações de Sim/Não para o desafio diário.
 // Só o administrador chama. As afirmações entram como RASCUNHO (inativas) e dependem de aprovação.
@@ -22,7 +25,7 @@ class GeminiError extends Error { constructor(public status: number, message: st
 async function askGemini(apiKey: string, prompt: string, temperature = 0.2): Promise<any> {
   let status = 500, message = "Erro Gemini";
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    const response = await fetchAi(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", temperature } }),
@@ -48,7 +51,7 @@ const GROQ_MODEL = Deno.env.get("GROQ_MODEL") || "llama-3.3-70b-versatile";
 const AI_ROUTE = (Deno.env.get("AI_ROTA_DESAFIO") || "auto").toLowerCase();
 
 async function askGroq(apiKey: string, prompt: string, temperature: number): Promise<any> {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const response = await fetchAi("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
     body: JSON.stringify({ model: GROQ_MODEL, temperature, response_format: { type: "json_object" }, messages: [{ role: "system", content: "Responda sempre em português do Brasil e somente com um objeto JSON válido." }, { role: "user", content: prompt }] }),

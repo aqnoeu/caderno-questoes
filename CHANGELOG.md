@@ -2,6 +2,10 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## Navegação do aluno no desktop — 2026-11-09
+
+- Exibe os rótulos do menu superior, incluindo Planejamento, e adiciona um atalho em Perfil.
+
 ## Sugestões de objetivas — 2026-11-09
 
 - Alunos podem sugerir questões objetivas com alternativas e gabarito. Após aprovação administrativa, a questão pode seguir ao Filtro de IA.

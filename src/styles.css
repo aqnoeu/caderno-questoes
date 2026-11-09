@@ -671,6 +671,7 @@ button.annulled {
 .app-header .user-nav { bottom: 14px; padding: 3px 0; gap: 26px; background: transparent; border: 0; box-shadow: none; border-radius: 0; }
 .user-nav button { padding: 8px 0; border-radius: 0; color: #20365e; font-size: 14px; font-weight: 600; }
 .user-nav button > span { display: none; }
+.desktop-user-nav button > .user-nav-label { display: inline; }
 .user-nav button.active { color: #1463df; background: transparent; box-shadow: none; border-bottom: 2px solid #1463df; }
 
 .user-home { position: relative; gap: 16px; }

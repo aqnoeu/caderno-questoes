@@ -298,7 +298,7 @@ function AdminLanding({title,description,items,onOpen}){
 
 function UserHub({ profile, isAdmin, go, admin }) {
   const items=[["inicio","home","Início"],["desempenho","bars","Desempenho"],
-    ["revanche","cycle","Modo Revanche"],["cadernos","document","Meus cadernos"],
+    ["revanche","cycle","Modo Revanche"],["planejamento","timer","Planejamento"],["cadernos","document","Meus cadernos"],
     ["essay-suggestions","document","Sugerir questões"],["configuracoes","settings","Configurações"],["apoio","heart","Apoiar o projeto"]];
   return <section className="card user-hub">
     <span className="eyebrow">MINHA ÁREA</span>

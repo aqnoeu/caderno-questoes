@@ -11,6 +11,7 @@ import { NotificationCenter } from "./notifications";
 import { ProvisionalCreator } from "./provisional";
 import { StudyPlanner } from "./study-planner";
 import { AdminNotebooks } from "./admin-notebooks";
+import { AdminNotebookCatalog } from "./admin-notebook-catalog";
 import { REVANCHE_ICON_PNG } from "./revenge-icon-png";
 import "./styles.css";
 
@@ -230,7 +231,7 @@ function parseAnswerKey(text) {
 }
 
 function AdminSidebar({ adminTab, setAdminTab, openUser }) {
-  const currentTabs = [["cadernos", "Cadernos pendentes"], ["overview", "Visão geral"], ["questoes", "Questões publicadas"], ["essay-cadastro", "Discursivas e peças"], ["essay-library", "Discursivas e peças cadastradas"], ["desafios", "Desafios"], ["creditos", "Créditos IA"]];
+  const currentTabs = [["gestao-cadernos", "Gerenciar cadernos"], ["cadernos", "Solicitações de cadernos"], ["overview", "Visão geral"], ["questoes", "Questões publicadas"], ["essay-cadastro", "Discursivas e peças"], ["essay-library", "Discursivas e peças cadastradas"], ["desafios", "Desafios"], ["creditos", "Créditos IA"]];
   const newTabs = [["sistema2", "Visão do modelo"], ["sistema2-cadastro", "Cadastro de questões"], ["sistema2-filter", "Filtro de IA"], ["sistema2-content", "Controle de conteúdo"], ["sistema2-test", "Testar ciclo"], ["ai-providers", "Configuração das IAs"]];
   const [expanded,setExpanded]=React.useState(false);
   React.useEffect(()=>setExpanded(false),[adminTab]);
@@ -276,6 +277,7 @@ function App() {
     [tab, setTab] = React.useState("inicio"),
     [revengeCycleId, setRevengeCycleId] = React.useState(""),
     [adminTab, setAdminTab] = React.useState("sistema2"),
+    [reviewNotebookId, setReviewNotebookId] = React.useState(null),
     [area, setArea] = React.useState("user"),
     [profile, setProfile] = React.useState(undefined),
     [questions, setQuestions] = React.useState([]),
@@ -624,7 +626,8 @@ function App() {
         {tab === "desempenho" && <Performance questions={userQuestions} notebookId={notebooks.notebook.id} userId={session.user.id} supabase={supabase} goStudy={() => setTab("estudos")} />}
         {tab === "planejamento" && <StudyPlanner key={notebooks.notebook.id} supabase={supabase} userId={session.user.id} notebookId={notebooks.notebook.id} questions={userQuestions} />}
         {tab === "cadernos" && <NotebookWelcome state={notebooks} onCreate={openEdict} />}
-      </>}</> : isAdmin ? <section className="admin-layout"><AdminSidebar adminTab={adminTab} setAdminTab={setAdminTab} openUser={openUser} /><div className="admin-content">{adminTab === "cadernos" && <AdminNotebooks supabase={supabase} questions={questions} />}{adminTab === "overview" && <AdminOverview questions={questions} supabase={supabase} />}{adminTab === "cadastro" && cadastroContent}{adminTab === "questoes" && <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} supabase={supabase} />}{adminTab === "essay-cadastro" && <EssayAdmin supabase={supabase} />}{adminTab === "essay-library" && <EssayLibrary supabase={supabase} />}{adminTab === "desafios" && <ChallengeAdmin supabase={supabase} />}{adminTab === "creditos" && <CorrectionCreditsAdmin supabase={supabase} />}{adminTab === "sistema2" && <System2Home openCadastro={() => setAdminTab("sistema2-cadastro")} openFilter={() => setAdminTab("sistema2-filter")} openContent={() => setAdminTab("sistema2-content")} />}{adminTab === "sistema2-cadastro" && <System2Cadastro supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "sistema2-filter" && <System2Filter supabase={supabase} onBack={() => setAdminTab("sistema2")} openContent={() => setAdminTab("sistema2-content")} />}{adminTab === "sistema2-content" && <System2Content supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "sistema2-test" && <System2Test supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "ai-providers" && <AiProviderSettings supabase={supabase} />}</div></section> : <section className="card"><h2>Acesso restrito</h2><p>Esta área é exclusiva para administradores.</p><button onClick={() => openUser("inicio")}>Voltar ao início</button></section>}
+      </>}</> : isAdmin ? <section className="admin-layout"><AdminSidebar adminTab={adminTab} setAdminTab={setAdminTab} openUser={openUser} /><div className="admin-content">{adminTab === "gestao-cadernos" && <AdminNotebookCatalog supabase={supabase} onReview={id=>{setReviewNotebookId(id);setAdminTab("cadernos");}}/>}
+  {adminTab === "cadernos" && <AdminNotebooks supabase={supabase} questions={questions} focusNotebookId={reviewNotebookId} />}{adminTab === "overview" && <AdminOverview questions={questions} supabase={supabase} />}{adminTab === "cadastro" && cadastroContent}{adminTab === "questoes" && <QuestionLibrary questions={questions} remove={remove} toggleHidden={toggleHidden} updateQuestion={updateQuestion} supabase={supabase} />}{adminTab === "essay-cadastro" && <EssayAdmin supabase={supabase} />}{adminTab === "essay-library" && <EssayLibrary supabase={supabase} />}{adminTab === "desafios" && <ChallengeAdmin supabase={supabase} />}{adminTab === "creditos" && <CorrectionCreditsAdmin supabase={supabase} />}{adminTab === "sistema2" && <System2Home openCadastro={() => setAdminTab("sistema2-cadastro")} openFilter={() => setAdminTab("sistema2-filter")} openContent={() => setAdminTab("sistema2-content")} />}{adminTab === "sistema2-cadastro" && <System2Cadastro supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "sistema2-filter" && <System2Filter supabase={supabase} onBack={() => setAdminTab("sistema2")} openContent={() => setAdminTab("sistema2-content")} />}{adminTab === "sistema2-content" && <System2Content supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "sistema2-test" && <System2Test supabase={supabase} onBack={() => setAdminTab("sistema2")} />}{adminTab === "ai-providers" && <AiProviderSettings supabase={supabase} />}</div></section> : <section className="card"><h2>Acesso restrito</h2><p>Esta área é exclusiva para administradores.</p><button onClick={() => openUser("inicio")}>Voltar ao início</button></section>}
     </main>
   );
 }

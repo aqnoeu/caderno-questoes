@@ -1,5 +1,7 @@
 import React from "react";
 
+const modalities = { objective: "Objetiva", piece: "Peça prática", discursive: "Discursiva" };
+
 const statuses = {
   pending: "Aguardando aprovação",
   approved: "Aprovada para análise",
@@ -74,13 +76,16 @@ export function EssaySuggestions({ supabase, userId, onOpen }) {
         {rows?.map((row) => (
           <article className="card essay-import-card" key={row.id}>
             <b>
-              {row.concurso} · {row.question_type === "piece" ? "Peça prática" : "Discursiva"}
+              {row.concurso} · {modalities[row.question_type]}
             </b>
-            <p>{statuses[row.status]}</p>
+            <p>{row.question_type === "objective" && row.status === "published" ? "Encaminhada ao Filtro de IA" : statuses[row.status]}</p>
             <details>
-              <summary>Ver enunciado e espelho</summary>
+              <summary>{row.question_type === "objective" ? "Ver questão e gabarito" : "Ver enunciado e espelho"}</summary>
               <pre className="essay-suggestion-text">{row.statement}</pre>
-              <b>Espelho</b>
+              {row.objective_options?.map((option, index) => (
+                <p className="essay-suggestion-text" key={index}>{"ABCDEFGH"[index]}) {option}</p>
+              ))}
+              <b>{row.question_type === "objective" ? "Gabarito" : "Espelho"}</b>
               <pre className="essay-suggestion-text">{row.answer_key_text}</pre>
             </details>
             {!userId && (

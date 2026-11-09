@@ -1719,3 +1719,12 @@ body{overflow-x:hidden}
   padding: 10px;
   text-align: left;
 }
+
+.objective-suggestion-fields {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}

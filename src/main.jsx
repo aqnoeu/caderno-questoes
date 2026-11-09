@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
 import { createClient } from "@supabase/supabase-js";
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -246,20 +247,40 @@ const ADMIN_GROUPS=[
 ];
 function AdminSidebar({ adminTab, setAdminTab, openUser }) {
   const current=ADMIN_GROUPS.find(g=>g.items.some(([id])=>id===adminTab))||ADMIN_GROUPS[0];
+  const groupIcons={cadastro:"document",gestao:"settings",analise:"bars",financeiro:"check"};
   return <aside className="admin-sidebar admin-grouped-sidebar">
     <div className="admin-grouped-top">
-      <button className="admin-back" type="button" onClick={()=>openUser("inicio")}>← Área do aluno</button>
-      <div><h2>Administração</h2><small>Caderno de Questões</small></div>
+      <div className="admin-panel-identity">
+        <span className="eyebrow">ÁREA RESTRITA</span>
+        <h2>Administração</h2>
+      </div>
+      <button className="admin-back" type="button" onClick={()=>openUser("inicio")}>
+        <span aria-hidden="true">←</span> Área do aluno
+      </button>
     </div>
-    <nav className="admin-group-tabs" aria-label="Áreas administrativas">
+    <nav className="admin-group-tabs" aria-label="Seções da administração">
       {ADMIN_GROUPS.map(group=><button type="button" key={group.id}
         className={group.id===current.id?"active":""} aria-current={group.id===current.id?"page":undefined}
         onClick={()=>setAdminTab(group.home)}>{group.label}</button>)}
     </nav>
+    <div className="admin-section-heading">
+      <strong>{current.label}</strong>
+      <span>{current.items.length===1?"Painel da seção":"Escolha uma ferramenta"}</span>
+    </div>
     <nav className="admin-group-subnav" aria-label={"Opções de "+current.label}>
       {current.items.map(([id,label])=><button type="button" key={id}
-        className={id===adminTab?"active":""} onClick={()=>setAdminTab(id)}>{label}</button>)}
+        className={id===adminTab?"active":""} aria-current={id===adminTab?"page":undefined}
+        onClick={()=>setAdminTab(id)}>{label}</button>)}
     </nav>
+    {createPortal(<nav className="admin-mobile-bottom-nav" aria-label="Navegação administrativa">
+      {ADMIN_GROUPS.map(group=><button type="button" key={group.id}
+        className={group.id===current.id?"active":""}
+        aria-current={group.id===current.id?"page":undefined}
+        onClick={()=>setAdminTab(group.home)}>
+          <LineIcon name={groupIcons[group.id]} size={22}/>
+          <span>{group.label}</span>
+        </button>)}
+    </nav>,document.body)}
   </aside>;
 }
 function AdminLanding({title,description,items,onOpen}){
@@ -623,12 +644,12 @@ function App() {
             <button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}>
               <span aria-hidden="true"><LineIcon name={icon}/></span><span className="user-nav-label">{label}</span>
             </button>)}</nav>
-          <nav className="mobile-user-nav" aria-label="Navegação principal">
+          {createPortal(<nav className="mobile-user-nav" aria-label="Navegação principal do aluno">
             {[["estudos","document","Questões"],["desafio","cycle","Desafios"],["discursivas","pen","Discursivas"],["planejamento","timer","Plano"],["perfil","settings","Perfil"]].map(([id,icon,label])=>
-              <button key={id} className={tab===id?"active":""} aria-current={tab===id?"page":undefined} onClick={()=>setTab(id)}>
+              <button type="button" key={id} className={tab===id?"active":""} aria-current={tab===id?"page":undefined} onClick={()=>setTab(id)}>
                 <LineIcon name={icon}/><span>{label}</span>
               </button>)}
-          </nav>
+          </nav>,document.body)}
         </>}
       </header>
       {notice && (

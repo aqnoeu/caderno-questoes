@@ -134,14 +134,32 @@ Deno.serve(async (request) => {
     if (!missing.length) {
       const key = Deno.env.get("GROQ_API_KEY");
       if (!key) throw new Error("Groq indisponível para conferência.");
+      const model = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
       const response = await fetchAi("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         signal: AbortSignal.timeout(90000),
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b",
+          model,
           temperature: 0,
-          response_format: { type: "json_object" },
+          ...(model.startsWith("openai/gpt-oss")
+            ? {
+                include_reasoning: false,
+                response_format: {
+                  type: "json_schema",
+                  json_schema: {
+                    name: "import_completeness",
+                    strict: false,
+                    schema: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["missing_fields"],
+                      properties: { missing_fields: { type: "array", items: { type: "string" } } },
+                    },
+                  },
+                },
+              }
+            : { response_format: { type: "json_object" } }),
           messages: [
             {
               role: "system",

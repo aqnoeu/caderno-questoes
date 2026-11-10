@@ -101,7 +101,7 @@ export function AdminNotebookCatalog({supabase,onReview}){
       <button disabled={saving||!title.trim()||title.trim()===active.title}>{saving?"Salvando…":"Salvar nome"}</button>
      </form>
      <p className="admin-catalog-safety">Alterar o título não modifica o concurso, o cargo de origem, as questões vinculadas ou o histórico dos alunos.</p>
-     {active.review_status&&<button type="button" className="light" onClick={()=>onReview(active.id)}>Analisar edital e questões deste caderno</button>}
+     <button type="button" className="light" disabled={saving} onClick={()=>onReview(active.id)}>Analisar e adicionar questões</button>
      <button type="button" className="danger light" disabled={saving} onClick={removeNotebook}>Excluir caderno</button>
     </div>}
    </div>

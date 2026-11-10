@@ -1,5 +1,4 @@
 import React from "react";
-import { resolveNotebookV63 } from "./system2";
 
 const letters = "ABCDEFGH";
 const fields = [
@@ -44,16 +43,9 @@ export function ObjectiveSuggestion({ supabase, suggestion, onSubmitted }) {
     setMessage("");
     try {
       if (suggestion) {
-        const destination = await resolveNotebookV63(
-          supabase,
-          form.concurso,
-          form.contest_cargo,
-          [],
-          1,
-        );
         const { error } = await supabase.rpc("queue_objective_suggestion", {
           suggestion_id: suggestion.id,
-          notebook: destination.notebook_id,
+          notebook: null,
         });
         if (error) throw error;
       } else {

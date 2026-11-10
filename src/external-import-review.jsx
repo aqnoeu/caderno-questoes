@@ -1,5 +1,6 @@
 import React from "react";
-import { resolveNotebookV63, System2List, System2QuestionCardV2 } from "./system2";
+import { NotebookDestination } from "./notebook-destination";
+import { System2List, System2QuestionCardV2 } from "./system2";
 
 const types = { objective: "Objetiva", discursive: "Discursiva", piece: "Peça processual" };
 const labels = {
@@ -13,6 +14,7 @@ export function ExternalImportReview({ supabase }) {
   const [timer, setTimer] = React.useState(null);
   const [interval, setIntervalMinutes] = React.useState("");
   const [now, setNow] = React.useState(Date.now);
+  const [destinations, setDestinations] = React.useState({});
   const [rows, setRows] = React.useState([]);
   const [view, setView] = React.useState("pending");
   const [busy, setBusy] = React.useState(false);
@@ -104,12 +106,10 @@ export function ExternalImportReview({ supabase }) {
             : "Confira os campos apontados na aba Com pendências.",
         );
       } else {
-        const p = row.payload;
-        const notebook = await resolveNotebookV63(supabase, p.concurso, p.cargo, [p.discipline], 1);
         const { error } = await supabase.rpc("release_external_question_import", {
           import_row_id: row.id,
           expected_revision: row.revision,
-          notebook: notebook.notebook_id,
+          notebook: destinations[row.id] || null,
         });
         if (error) throw error;
         setMessage(
@@ -235,14 +235,28 @@ export function ExternalImportReview({ supabase }) {
                           : "Conferir preenchimento"}
                       </button>
                     ) : row.status === "ready" ? (
-                      <button
-                        type="button"
-                        className="compact"
-                        disabled={busy}
-                        onClick={() => act(row, "release")}
-                      >
-                        {objective ? "Encaminhar ao Controle de Conteúdo" : "Cadastrar no acervo"}
-                      </button>
+                      <>
+                        {!objective && (
+                          <NotebookDestination
+                            supabase={supabase}
+                            value={destinations[row.id] || ""}
+                            onChange={(value) =>
+                              setDestinations((current) => ({ ...current, [row.id]: value }))
+                            }
+                            required
+                          />
+                        )}
+                        <button
+                          type="button"
+                          className="compact"
+                          disabled={busy || (!objective && !destinations[row.id])}
+                          onClick={() => act(row, "release")}
+                        >
+                          {objective
+                            ? "Encaminhar ao Controle de Conteúdo"
+                            : "Cadastrar no caderno selecionado"}
+                        </button>
+                      </>
                     ) : null,
                 }}
               />

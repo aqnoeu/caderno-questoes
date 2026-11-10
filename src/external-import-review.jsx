@@ -2,6 +2,8 @@ import React from "react";
 import { NotebookDestination } from "./notebook-destination";
 import { System2List, System2QuestionCardV2 } from "./system2";
 
+import { authorizeQuestionBatch } from "./question-batch";
+
 const types = { objective: "Objetiva", discursive: "Discursiva", piece: "Peça processual" };
 const labels = {
   pending: "Aguardando conferência",
@@ -15,6 +17,7 @@ export function ExternalImportReview({ supabase }) {
   const [interval, setIntervalMinutes] = React.useState("");
   const [now, setNow] = React.useState(Date.now);
   const [destinations, setDestinations] = React.useState({});
+  const [batchDestination, setBatchDestination] = React.useState("");
   const [counts, setCounts] = React.useState({});
   const [rows, setRows] = React.useState([]);
   const [view, setView] = React.useState("pending");
@@ -100,6 +103,42 @@ export function ExternalImportReview({ supabase }) {
     ),
   );
 
+  function release(row, notebook) {
+    return supabase.rpc("release_external_question_import", {
+      import_row_id: row.id,
+      expected_revision: row.revision,
+      notebook,
+    });
+  }
+
+  async function releaseAll() {
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await authorizeQuestionBatch(
+        () => supabase.from("external_question_imports")
+          .select("id,revision,modality").eq("status", "ready"),
+        (row) => {
+          const notebook = destinations[row.id] || batchDestination;
+          return row.modality === "objective" || notebook
+            ? { row, notebook: row.modality === "objective" ? null : notebook }
+            : null;
+        },
+        ({ row, notebook }) => release(row, notebook),
+        (count, skipped) => window.confirm(
+          `Autorizar ${count} importação(ões)? As objetivas irão ao Controle de Conteúdo. As discursivas e peças irão aos cadernos selecionados.` +
+            (skipped ? ` ${skipped} ficarão aguardando caderno de destino.` : ""),
+        ),
+      );
+      if (result) await load();
+      setMessage(result);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function act(row, action) {
     setBusy(true);
     setMessage("");
@@ -118,11 +157,7 @@ export function ExternalImportReview({ supabase }) {
             : "Confira os campos apontados na aba Com pendências.",
         );
       } else {
-        const { error } = await supabase.rpc("release_external_question_import", {
-          import_row_id: row.id,
-          expected_revision: row.revision,
-          notebook: destinations[row.id] || null,
-        });
+        const { error } = await release(row, destinations[row.id] || null);
         if (error) throw error;
         setMessage(
           row.modality === "objective"
@@ -200,6 +235,22 @@ export function ExternalImportReview({ supabase }) {
       <button type="button" className="light" disabled={busy} onClick={load}>
         Atualizar lista
       </button>
+      {view === "ready" && (
+        <fieldset className="card system2-form" disabled={busy}>
+          <legend>Autorização em lote</legend>
+          <p>As objetivas seguem para o Controle de Conteúdo. Para discursivas e peças, escolha um caderno por questão ou selecione abaixo um destino comum para as demais.</p>
+          <NotebookDestination
+            supabase={supabase}
+            value={batchDestination}
+            onChange={setBatchDestination}
+          />
+          <div className="study-actions">
+            <button type="button" disabled={!counts.ready} onClick={releaseAll}>
+              Autorizar todas as importações prontas
+            </button>
+          </div>
+        </fieldset>
+      )}
       {message && <p role="status">{message}</p>}
       {rows.length === 0 && <p>Nenhuma importação nesta lista.</p>}
       {rows.some((row) => row.status === view) && (

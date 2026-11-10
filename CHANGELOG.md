@@ -2,6 +2,15 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## Busca por etiqueta no caderno OAB
+
+- Localiza questões do Exame de Ordem pela identificação da prova ou pela etiqueta OAB, mesmo sem edital.
+
+## Autorização de questões em lote
+
+- Promove as objetivas aprovadas ao acervo atual ou as encaminha para revisão humana em lote pelo Controle de Conteúdo.
+- Autoriza importações prontas em lote, com escolha de caderno existente para discursivas e peças.
+
 ## Abas por caderno no acervo
 
 - Agrupa as questões pelos cadernos vinculados e mostra as questões avulsas em Sem caderno.

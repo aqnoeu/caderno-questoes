@@ -1,5 +1,6 @@
 import React from "react";
 import { parseOabAnswerKeyPdf, detectExamType, formatAnswerKey } from "./answer-key-pdf";
+import { authorizeQuestionBatch } from "./question-batch";
 import * as pdfjs from "pdfjs-dist";
 
 const cleanSpace = (value) => String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
@@ -310,33 +311,72 @@ export function System2Filter({ supabase, onBack, openContent }) {
 export function System2Content({ supabase, onBack }) {
   const [view, setView] = React.useState("pending");
   const pending = view === "pending";
+  const [batchAction, setBatchAction] = React.useState(null);
+  const [batchMessage, setBatchMessage] = React.useState("");
   return <section className="system2-page">
     <button className="link-button" onClick={onBack}>← Voltar ao Modelo novo</button>
     <span className="eyebrow">CONTROLE DE CONTEÚDO</span>
     <h1>Questões aprovadas</h1>
     <nav className="study-actions" aria-label="Situação no acervo">
-      <button type="button" className={pending ? "" : "light"} aria-pressed={pending} onClick={() => setView("pending")}>Aguardando promoção</button>
-      <button type="button" className={pending ? "light" : ""} aria-pressed={!pending} onClick={() => setView("promoted")}>Já no acervo</button>
+      <button type="button" className={pending ? "" : "light"} aria-pressed={pending} disabled={batchAction} onClick={() => setView("pending")}>Aguardando promoção</button>
+      <button type="button" className={pending ? "light" : ""} aria-pressed={!pending} disabled={batchAction} onClick={() => setView("promoted")}>Já no acervo</button>
     </nav>
-    <System2ContentList key={view} supabase={supabase} view={view} />
+    <p role="status">{batchMessage}</p>
+    <System2ContentList key={view} supabase={supabase} view={view} batchAction={batchAction} setBatchAction={setBatchAction} setBatchMessage={setBatchMessage} />
   </section>;
 }
 
-function System2ContentList({ supabase, view }) {
+function System2ContentList({ supabase, view, batchAction, setBatchAction, setBatchMessage }) {
   const { questions, loading, error, reload } = useSystem2Questions(supabase, view);
   const pending = view === "pending";
+  async function moveAll(action) {
+    const promote = action === "promote";
+    setBatchAction(action);
+    setBatchMessage("");
+    try {
+      const result = await authorizeQuestionBatch(
+        () => supabase.from("questions_v2").select("id").eq("status", "approved")
+          .is("promoted_question_id", null).eq("is_test", false),
+        (row) => row,
+        async (row) => {
+          if (promote) return supabase.rpc("promote_question_v2", { p_question_id:row.id });
+          const { data, error } = await supabase.from("questions_v2").update({ status:"needs_review" })
+            .eq("id", row.id).eq("status", "approved").is("promoted_question_id", null)
+            .eq("is_test", false).select("id").maybeSingle();
+          return { error: error || (!data && new Error("A questão já mudou de etapa.")) };
+        },
+        (count) => window.confirm(promote
+          ? `Promover ${count} questão(ões) aprovadas ao acervo atual?`
+          : `Enviar ${count} questão(ões) para revisão humana no Filtro de IA?`),
+      );
+      if (result) await reload();
+      setBatchMessage(result);
+    } catch (error) {
+      setBatchMessage(error.message);
+    } finally {
+      setBatchAction(null);
+    }
+  }
+
+  const batchDisabled = loading || Boolean(batchAction) || Boolean(error) || !questions.some((item) => !item.is_test);
   return <>
     <p className="system2-lead">{pending
       ? "Revise as questões aprovadas e promova ao acervo as que estiverem prontas."
       : "Consulte as questões que já foram promovidas. Alterações aqui afetam somente o Modelo novo."}</p>
     <div className="system2-toolbar">
       <p>{!loading && !error && <><b>{questions.length}</b> questão(ões) nesta lista.</>}</p>
-      <div><button className="light compact" disabled={loading} onClick={reload}>Atualizar dados</button></div>
+      <div className="study-actions">
+        <button className="light compact" disabled={loading || batchAction} onClick={reload}>Atualizar dados</button>
+        {pending && <>
+          <button className="compact" disabled={batchDisabled} onClick={() => moveAll("promote")}>{batchAction === "promote" ? "Promovendo…" : "Promover todas ao acervo atual"}</button>
+          <button className="light compact" disabled={batchDisabled} onClick={() => moveAll("review")}>{batchAction === "review" ? "Enviando…" : "Enviar todas para revisão"}</button>
+        </>}
+      </div>
     </div>
     {loading ? <p className="empty-state">Carregando questões…</p>
       : error ? <p className="form-message">Não foi possível carregar as questões: {error}</p>
       : questions.length ? <System2List items={questions} renderItem={(item) =>
-        <System2QuestionCardV2 key={item.id} item={item} supabase={supabase} onChanged={reload} allowPromote={pending} />} />
+        <System2QuestionCardV2 key={item.id} item={item} supabase={supabase} onChanged={reload} allowPromote={pending && !batchAction} />} />
       : <div className="card empty-state"><b>{pending ? "Nenhuma questão aguardando promoção." : "Nenhuma questão promovida ao acervo."}</b></div>}
   </>;
 }

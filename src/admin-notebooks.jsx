@@ -20,7 +20,7 @@ export function AdminNotebooks({ supabase, questions = [], focusNotebookId = nul
 
  const load=React.useCallback(async()=>{
    const {data,error:fetchError}=await supabase.from("provisional_notebook_specs")
-     .select("notebook_id,user_id,topics,created_at,review_status,review_note,edital_selected_role,source_filename,edital_analysis,study_notebooks!inner(id,title,cargo,source_concurso,visibility,kind)")
+     .select("notebook_id,user_id,topics,created_at,review_status,review_note,edital_selected_role,source_filename,edital_analysis,study_notebooks!inner(id,title,code,cargo,source_concurso,visibility,kind)")
      .order("created_at",{ascending:false});
    if(fetchError){setError("Não foi possível carregar a fila: "+fetchError.message);return;}
    let list=data||[];
@@ -65,7 +65,8 @@ export function AdminNotebooks({ supabase, questions = [], focusNotebookId = nul
    });
  };
  const suggestionsMap=new Map((suggestions||[]).map(s=>[s.question_id,s]));
- const compatibleSearch=topics.length>0||active?.study_notebooks?.code==="oab";
+ const isOab=active?.study_notebooks?.code==="oab";
+ const compatibleSearch=topics.length>0||isOab;
  const available=(suggestions!==null?foundQuestions:questions).filter(q=>!links.includes(q.id)&&!q.is_hidden&&!q.is_annulled&&q.correct_option&&q.correct_option!=="*"&&
    (suggestions!==null?suggestionsMap.has(q.id):
       (!search.trim()&&topics.length?matches(q):true)) &&
@@ -87,7 +88,9 @@ export function AdminNotebooks({ supabase, questions = [], focusNotebookId = nul
        setFoundQuestions(rows||[]);
      }else setFoundQuestions([]);
      setSearch("");setSuggestions(candidates);
-     setMessage(candidates.length+" questão(ões) encontrada(s). Selecione as que deseja adicionar.");
+     setMessage(isOab && !candidates.length
+       ? "Nenhuma questão OAB disponível para adicionar. A busca exibe somente questões elegíveis que ainda não estão neste caderno."
+       : candidates.length+" questão(ões) encontrada(s). Selecione as que deseja adicionar.");
    }catch(err){setError("Não foi possível pesquisar o acervo: "+err.message);}
    finally{setMatchingBusy(false);}
  }
@@ -144,10 +147,12 @@ export function AdminNotebooks({ supabase, questions = [], focusNotebookId = nul
            <div className="admin-topic-list">{topics.map((t,i)=><p key={i}>{t.discipline}{t.subject?" — "+t.subject:""}</p>)}</div>
          </details>
          <h3>Autorizar questões do acervo</h3>
-         <p>A pesquisa por filtros utiliza apenas matérias e assuntos já cadastrados. Não consome chamadas de IA nem altera questões automaticamente.</p>
+         <p>{isOab
+           ? "A busca usa a etiqueta OAB e a identificação do Exame de Ordem no acervo. O vínculo depende da sua seleção."
+           : "A pesquisa cruza as matérias e os assuntos cadastrados com o conteúdo programático do caderno."}</p>
          <div className="admin-match-controls">
            {compatibleSearch&&<button type="button" disabled={matchingBusy||busy} onClick={analyzeCompatibility}>
-             {matchingBusy?"Pesquisando…":"Analisar questões compatíveis"}
+             {matchingBusy?"Pesquisando…":isOab?"Buscar questões com etiqueta OAB":"Analisar questões compatíveis"}
            </button>}
            {suggestions!==null&&<button type="button" className="light" onClick={()=>{setSuggestions(null);setSelected([]);setSearch("");}}>Voltar à busca manual</button>}
          </div>
@@ -170,7 +175,7 @@ export function AdminNotebooks({ supabase, questions = [], focusNotebookId = nul
                {suggestionsMap.has(q.id)&&<small className="admin-match-score">
                  {suggestionsMap.get(q.id)?.match_score>=80?"Correspondência direta":"Correspondência sugerida"}
                  {" · "}{suggestionsMap.get(q.id)?.match_reason}
-                 {" · Edital: "}{suggestionsMap.get(q.id)?.matched_topic}
+                 {isOab?" · Etiqueta: ":" · Edital: "}{suggestionsMap.get(q.id)?.matched_topic}
                </small>}
                <small>{String(q.subject||"").slice(0,100)}</small>
                <span>{String(q.statement||"").slice(0,160)}</span></span>

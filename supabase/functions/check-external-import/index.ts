@@ -204,7 +204,7 @@ Deno.serve(async (request) => {
         review_retry_at: null,
         review_error: null,
       })
-      .eq("id", id)
+      .eq("id", row.id)
       .eq("revision", row.revision)
       .eq("review_claim", row.review_claim)
       .eq("status", "pending")

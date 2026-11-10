@@ -1050,6 +1050,9 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion, supa
   const [boardFilter, setBoardFilter] = React.useState("");
   const [yearFilter, setYearFilter] = React.useState("");
   const [contestFilter, setContestFilter] = React.useState("");
+  const [notebookFilter, setNotebookFilter] = React.useState("");
+  const [notebookLinks, setNotebookLinks] = React.useState(null);
+  const [notebookError, setNotebookError] = React.useState("");
   const [selectedIds, setSelectedIds] = React.useState([]);
   const [bulk, setBulk] = React.useState({ concurso: "", banca: "", ano: "" });
   const [busy, setBusy] = React.useState(false);
@@ -1061,9 +1064,40 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion, supa
   const years = [...new Set(questions.map((q) => q.ano).filter(Boolean))].sort((a, b) => b - a);
   const contests = [...new Set(questions.map((q) => q.concurso).filter(Boolean))].sort();
   React.useEffect(() => { let alive = true; supabase.from("contest_tags").select("*").then(({ data }) => { if (alive && data) setTags(Object.fromEntries(data.map((tag) => [tag.contest, tag]))); }); return () => { alive = false; }; }, [supabase]);
+  React.useEffect(() => {
+    let active = true;
+    async function loadNotebookLinks() {
+      const links = [];
+      for (let start = 0; active; start += 500) {
+        const { data, error } = await supabase.from("notebook_questions")
+          .select("notebook_id,question_id,study_notebooks!inner(title)")
+          .order("notebook_id").order("question_id").range(start, start + 499);
+        if (!active) return;
+        if (error) { setNotebookError(error.message); return; }
+        links.push(...data);
+        if (data.length < 500) break;
+      }
+      if (active) { setNotebookLinks(links); setNotebookError(""); }
+    }
+    loadNotebookLinks();
+    return () => { active = false; };
+  }, [supabase]);
+  const questionIds = new Set(questions.map((question) => question.id));
+  const linkedIds = new Set();
+  const notebooks = new Map();
+  for (const link of notebookLinks || []) {
+    if (!questionIds.has(link.question_id)) continue;
+    linkedIds.add(link.question_id);
+    if (!notebooks.has(link.notebook_id)) notebooks.set(link.notebook_id, { title: link.study_notebooks.title, ids: new Set() });
+    notebooks.get(link.notebook_id).ids.add(link.question_id);
+  }
+  const notebookTabs = [...notebooks].sort(([, a], [, b]) => a.title.localeCompare(b.title, "pt-BR"));
+  const noNotebook = questions.length - linkedIds.size;
+  function selectNotebook(value) { setNotebookFilter(value); setSelectedIds([]); }
   const filteredQuestions = questions.filter((q) => {
     const searchable = `${q.id} ${q.statement} ${q.discipline || ""} ${q.subject || ""}`.toLowerCase();
-    return (!search || searchable.includes(search.toLowerCase())) &&
+    return (!notebookFilter || (notebookFilter === "__missing__" ? !linkedIds.has(q.id) : notebooks.get(notebookFilter)?.ids.has(q.id))) &&
+      (!search || searchable.includes(search.toLowerCase())) &&
       (!disciplineFilter || q.discipline === disciplineFilter) &&
       hasSubject(q, subjectFilter) &&
       (!difficultyFilter || (q.difficulty_current || q.difficulty_initial || "media") === difficultyFilter) &&
@@ -1101,7 +1135,12 @@ function QuestionLibrary({ questions, remove, toggleHidden, updateQuestion, supa
   return (
     <section className="questions-library">
       <div className="library-heading"><div><h2>Questões cadastradas</h2><p>{filteredQuestions.length} de {questions.length} questão(ões).</p></div></div>
-      {contests.length > 0 && <div className="contest-tabs"><button className={!contestFilter ? "active" : ""} onClick={() => setContestFilter("")}>Todas <small>{questions.length}</small></button>{contests.map((contest) => { const tag = tags[contest]; return <button key={contest} className={contestFilter === contest ? "active" : ""} style={tag ? { background: tag.color, color: tag.text_color } : undefined} onClick={() => setContestFilter(contest)}>{tag?.label || contest} <small>{questions.filter((q) => q.concurso === contest).length}</small></button>; })}</div>}
+      {notebookError && <p role="alert">Não foi possível carregar os vínculos dos cadernos. {notebookError}</p>}
+      {notebookLinks && questions.length > 0 && <div className="contest-tabs" aria-label="Filtrar por caderno">
+        <button type="button" className={!notebookFilter ? "active" : ""} aria-pressed={!notebookFilter} onClick={() => selectNotebook("")}>Todas <small>{questions.length}</small></button>
+        {notebookTabs.map(([id, book]) => <button type="button" key={id} className={notebookFilter === id ? "active" : ""} aria-pressed={notebookFilter === id} onClick={() => selectNotebook(id)}>{book.title} <small>{book.ids.size}</small></button>)}
+        {(noNotebook > 0 || notebookFilter === "__missing__") && <button type="button" className={notebookFilter === "__missing__" ? "active" : ""} aria-pressed={notebookFilter === "__missing__"} onClick={() => selectNotebook("__missing__")}>Sem caderno <small>{noNotebook}</small></button>}
+      </div>}
       <div className="library-filters">
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por texto ou ID" />
         <select value={disciplineFilter} onChange={(e) => { setDisciplineFilter(e.target.value); setSubjectFilter(""); }}><option value="">Todas as disciplinas</option>{disciplines.map((x) => <option key={x}>{x}</option>)}</select>

@@ -2,6 +2,10 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## Abas por caderno no acervo
+
+- Agrupa as questões pelos cadernos vinculados e mostra as questões avulsas em Sem caderno.
+
 ## Bancas e indicadores administrativos
 
 - Exibe a banca em campo próprio nas objetivas e separa os indicadores de alunos e atividade dos dados do acervo.

@@ -4,7 +4,7 @@ A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cad
 
 ## Autorização de questões em lote
 
-- Promove as objetivas aprovadas ao acervo atual pelo Controle de Conteúdo.
+- Promove as objetivas aprovadas ao acervo atual ou as encaminha para revisão humana em lote pelo Controle de Conteúdo.
 - Autoriza importações prontas em lote, com escolha de caderno existente para discursivas e peças.
 
 ## Abas por caderno no acervo

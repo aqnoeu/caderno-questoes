@@ -2,6 +2,10 @@
 
 A numeração segue o pacote de atualização do projeto (v52, v53, v54...). Cada versão tem uma tag `vNN` no Git e, antes de cada atualização, uma branch de backup `backup/AAAA-MM-DD-descrição` com a versão anterior.
 
+## Exclusão administrativa de cadernos
+
+- Adiciona exclusão em Gerenciar cadernos, preservando o acervo e bloqueando a operação quando há planejamento ou sessões de Revanche vinculadas.
+
 ## Timer da revisão de importações
 
 - Confere automaticamente as questões pendentes pelo Groq, com intervalo configurável e opção de pausa.

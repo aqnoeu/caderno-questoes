@@ -43,6 +43,19 @@ export function AdminNotebookCatalog({supabase,onReview}){
   else {setNotice("Nome atualizado. A identidade do caderno e os resultados foram preservados.");await refresh();}
   setSaving(false);
  }
+ async function removeNotebook(){
+  if(!active||saving)return;
+  const confirmed=window.confirm(`Excluir definitivamente “${active.title}”? Os vínculos com alunos e questões serão removidos. As questões continuarão no acervo.`);
+  if(!confirmed)return;
+  setSaving(true);setError("");setNotice("");
+  try{
+   const {error:err}=await supabase.rpc("admin_delete_notebook",{p_id:active.id});
+   if(err)throw err;
+   setCurrent(null);setTitle("");
+   setNotice("Caderno excluído. As questões continuam no acervo.");
+   await refresh();
+  }catch(err){setError(err.message);}finally{setSaving(false);}
+ }
  return <section className="admin-catalog">
   <div className="admin-notebook-heading"><div><span className="eyebrow">GESTÃO DO ACERVO</span>
    <h1>Todos os cadernos</h1><p>Organize os cadernos, confira seus vínculos e acompanhe as solicitações.</p></div>
@@ -65,7 +78,7 @@ export function AdminNotebookCatalog({supabase,onReview}){
    <div className="admin-catalog-list">
     {loading&&<p>Carregando cadernos…</p>}
     {!loading&&!filtered.length&&<p>Nenhum caderno encontrado.</p>}
-    {filtered.map(item=><button type="button" key={item.id} className={"admin-catalog-entry"+(item.id===current?" chosen":"")} onClick={()=>select(item)}>
+    {filtered.map(item=><button type="button" key={item.id} className={"admin-catalog-entry"+(item.id===current?" chosen":"")} disabled={saving} onClick={()=>select(item)}>
      <span><strong>{item.title}</strong><small>{item.cargo||item.source_concurso||"Caderno geral"}</small></span>
      <span><span>{KIND[item.kind]||item.kind}</span><small>{item.question_count} questões · {item.student_count} aluno(s)</small></span>
     </button>)}
@@ -89,10 +102,11 @@ export function AdminNotebookCatalog({supabase,onReview}){
      </form>
      <p className="admin-catalog-safety">Alterar o título não modifica o concurso, o cargo de origem, as questões vinculadas ou o histórico dos alunos.</p>
      {active.review_status&&<button type="button" className="light" onClick={()=>onReview(active.id)}>Analisar edital e questões deste caderno</button>}
-     {notice&&<p className="form-message">{notice}</p>}
+     <button type="button" className="danger light" disabled={saving} onClick={removeNotebook}>Excluir caderno</button>
     </div>}
    </div>
   </div>
+  {notice&&<p role="status" className="form-message">{notice}</p>}
   {error&&<p role="alert" className="form-message">{error}</p>}
  </section>;
 }

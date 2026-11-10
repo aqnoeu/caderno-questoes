@@ -15,20 +15,32 @@ export function ExternalImportReview({ supabase }) {
   const [interval, setIntervalMinutes] = React.useState("");
   const [now, setNow] = React.useState(Date.now);
   const [destinations, setDestinations] = React.useState({});
+  const [counts, setCounts] = React.useState({});
   const [rows, setRows] = React.useState([]);
   const [view, setView] = React.useState("pending");
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState("");
   const load = React.useCallback(async () => {
-    const { data, error } = await supabase
-      .from("external_question_imports")
-      .select(
-        "id,batch_name,modality,payload,revision,status,missing_fields,created_at,review_claim_until,review_retry_at,review_error",
-      )
-      .eq("status", view)
-      .order("created_at", { ascending: false });
+    const statuses = Object.keys(labels);
+    const [list, ...totals] = await Promise.all([
+      supabase
+        .from("external_question_imports")
+        .select(
+          "id,batch_name,modality,payload,revision,status,missing_fields,created_at,review_claim_until,review_retry_at,review_error",
+        )
+        .eq("status", view)
+        .order("created_at", { ascending: false }),
+      ...statuses.map((status) =>
+        supabase
+          .from("external_question_imports")
+          .select("id", { count: "exact", head: true })
+          .eq("status", status),
+      ),
+    ]);
+    const error = list.error || totals.find((total) => total.error)?.error;
     if (error) setMessage(error.message);
-    else setRows(data);
+    if (!list.error) setRows(list.data);
+    setCounts(Object.fromEntries(statuses.map((status, index) => [status, totals[index].count])));
   }, [supabase, view]);
 
   React.useEffect(() => {
@@ -181,7 +193,7 @@ export function ExternalImportReview({ supabase }) {
               setMessage("");
             }}
           >
-            {label}
+            {label} ({counts[key]?.toLocaleString("pt-BR") ?? "—"})
           </button>
         ))}
       </nav>

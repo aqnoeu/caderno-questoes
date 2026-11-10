@@ -1,12 +1,16 @@
 import React from "react";
 import { SupportCampaigns } from "./support-campaigns";
 
-const metricTitles=[
- ["students","Alunos cadastrados"],["new_students_30d","Novos alunos (30 dias)"],
+const studentMetrics=[
+ ["students","Alunos cadastrados"],["new_students_30d","Novos alunos em 30 dias"],
+ ["active_students_30d","Alunos que responderam em 30 dias"],["students_with_notebooks","Alunos com caderno"],
+ ["student_answers_30d","Respostas de alunos em 30 dias"],
+];
+const libraryMetrics=[
  ["notebooks","Cadernos criados"],["published_notebooks","Cadernos disponíveis"],
  ["provisional","Cadernos provisórios"],["pending","Aguardando aprovação"],
  ["questions","Questões disponíveis"],["essays","Discursivas cadastradas"],
- ["cycles","Ciclos de estudo"],["memberships","Vínculos aluno/caderno"]
+ ["cycles","Ciclos iniciados"],["completed_cycles","Ciclos concluídos"],["memberships","Vínculos aluno/caderno"]
 ];
 export function AdminAnalytics({supabase}){
  const [stats,setStats]=React.useState(null);
@@ -25,8 +29,13 @@ export function AdminAnalytics({supabase}){
    <button type="button" className="light" disabled={loading} onClick={reload}>Atualizar</button>
   </div>
   {loading&&<p>Carregando indicadores…</p>}
-  {stats&&<div className="admin-analysis-grid">{metricTitles.map(([key,label])=>
-   <article className="card" key={key}><small>{label}</small><strong>{Number(stats[key]||0).toLocaleString("pt-BR")}</strong></article>)}</div>}
+  {stats&&<>{[["Alunos e atividade",studentMetrics],["Cadernos e acervo",libraryMetrics]].map(([heading,metrics])=>
+   <section key={heading}>
+    <h2>{heading}</h2>
+    <div className="admin-analysis-grid">{metrics.map(([key,label])=>
+     <article className="card" key={key}><small>{label}</small><strong>{stats[key]==null?"—":Number(stats[key]).toLocaleString("pt-BR")}</strong></article>)}</div>
+   </section>)}</>}
+
   {error&&<p role="alert" className="form-message">{error}</p>}
  </section>;
 }
